@@ -1,0 +1,10 @@
+llama-server \                                                                           ✔  11:31:14 ▓▒░
+    -hf unsloth/Qwen3.5-9B-GGUF:UD-Q4_K_XL \
+    --ctx-size 256000 \
+    --temp 0.6 \
+    --top-p 0.95 \
+    --top-k 20 \
+    --min-p 0.00 \
+    --alias "unsloth/Qwen3.5-9B-GGUF" \
+    --port 8080 \
+    --chat-template-kwargs '{"enable_thinking":true}'
