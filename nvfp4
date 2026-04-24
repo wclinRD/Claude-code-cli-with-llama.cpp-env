@@ -1,18 +1,19 @@
-llama-server -hf unsloth/Qwen3.5-4B-GGUF:UD-Q4_K_XL \                                                              
--ngl 999 \
--t 5 \ 
--c 98304 \
--b 512 \
--ub 2048 \
+llama-server -hf unsloth/Qwen3.5-4B-GGUF:UD-Q4_K_XL \
+-ngl 999 \          
+-t 5 \              
+-c 98304 \          
+-b 512 \            
+-ub 2048 \          
 --temp 0.8 --top-p 0.95 --min-p 0.01 --fit on \
---parallel 2 \ 
--fa on \
---jinja \
---keep 1024 \
---cache-type-k q4_0 \
+--parallel 2 \   
+-fa on \            
+--jinja \           
+--keep 1024 \       
+--cache-type-k q4_0 \                                                                                              
 --cache-type-v q4_0 \
---swa-full \
+--swa-full \        
 --no-context-shift \
---chat-template-kwargs '{"enable_thinking": false}' \
---mlock \
---no-mmap
+--reasoning on \ 
+--chat-template-file qwen35.jinja \
+--mlock \           
+--no-mmap           
