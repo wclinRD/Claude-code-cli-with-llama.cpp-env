@@ -14,7 +14,8 @@ from data_fetcher import (
     fetch_data, get_latest_price, fetch_institutional_holdings, 
     fetch_margin_short, fetch_stock_info, fetch_daily_summary, fetch_industry_performance,
     detect_otc_market, fetch_gretai_range, detect_market, fetch_macro_data,
-    fetch_all_news, fetch_stock_news_by_keyword, resolve_stock_code, search_stock_by_name
+    fetch_all_news, fetch_stock_news_by_keyword, resolve_stock_code, search_stock_by_name,
+    fetch_vix_data, analyze_vix_signals, fetch_institutional_detail, analyze_institutional_trend
 )
 from price_action import analyze_price_action
 from moving_avg import analyze_moving_avg, calculate_mas
@@ -96,6 +97,15 @@ def run_full_analysis(ticker: str, period: str = "6mo", chart_type: str = "both"
         results['institutional'] = fetch_institutional_holdings(twse_code)
         results['margin_short'] = fetch_margin_short(twse_code)
         results['stock_info'] = fetch_stock_info(ticker)
+        
+        inst_detail = fetch_institutional_detail(twse_code, days=20)
+        if inst_detail is not None:
+            results['institutional_detail'] = inst_detail
+            results['institutional_trend'] = analyze_institutional_trend(inst_detail)
+    
+    results['vix'] = fetch_vix_data()
+    if results.get('vix') is not None:
+        results['vix_signals'] = analyze_vix_signals(results['vix'])
     
     results['market_summary'] = fetch_daily_summary()
     results['industry'] = fetch_industry_performance()

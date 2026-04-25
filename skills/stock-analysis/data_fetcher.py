@@ -1575,5 +1575,266 @@ def fetch_tech_news() -> List[Dict]:
         
         return results[:6]
     
-    except Exception as e:
+    except Exception:
         return []
+    
+
+def fetch_vix_data(period: str = "6mo") -> Optional[pd.DataFrame]:
+    """
+    取得 VIX 波動率指數
+    
+    Args:
+        period: 資料期間 (1mo/3mo/6mo/1y/2y/5y)
+    
+    Returns:
+        DataFrame: VIX 歷史數據
+    """
+    try:
+        import yfinance as yf
+        
+        period_map = {'1mo': '1mo', '3mo': '3mo', '6mo': '6mo', '1y': '1y', '2y': '2y', '5y': '5y'}
+        df_period = period_map.get(period, '6mo')
+        
+        vix = yf.download("^VIX", period=df_period, progress=False)
+        
+        if vix is None or vix.empty:
+            return None
+        
+        if isinstance(vix.columns, pd.MultiIndex):
+            vix.columns = [col[0].lower() if isinstance(col, tuple) else col.lower() for col in vix.columns]
+        else:
+            vix.columns = [col.lower() for col in vix.columns]
+        
+        return vix
+        
+    except Exception as e:
+        print(f"VIX data fetch error: {e}")
+        return None
+
+
+def analyze_vix_signals(vix_df: pd.DataFrame) -> Dict:
+    """
+    分析 VIX 訊號
+    
+    Args:
+        vix_df: VIX 歷史數據
+    
+    Returns:
+        dict: VIX 訊號分析
+    """
+    if vix_df is None or vix_df.empty:
+        return {'error': 'No VIX data'}
+    
+    try:
+        closes = vix_df['close'].dropna()
+        
+        if closes.empty:
+            return {'error': 'No VIX closes'}
+        
+        current = closes.iloc[-1]
+        
+        recent = closes.tail(30)
+        avg_30 = recent.mean() if len(recent) > 0 else current
+        std_30 = recent.std() if len(recent) > 1 else 0
+        
+        if len(closes) >= 5:
+            trend = 'rising' if closes.iloc[-1] > closes.iloc[-5] else 'falling'
+        else:
+            trend = 'stable'
+        
+        if len(closes) >= 20:
+            ma20 = closes.tail(20).mean()
+            level = 'high' if current > avg_30 * 1.2 else 'low' if current < avg_30 * 0.8 else 'normal'
+        else:
+            level = 'normal'
+        
+        if current >= 30:
+            signal = 'fearful'
+            interpretation = '市場恐懼高位，注意潛在危機'
+        elif current >= 20:
+            signal = 'elevated'
+            interpretation = '市場擔憂情緒升溫'
+        elif current >= 15:
+            signal = 'neutral'
+            interpretation = '市場情緒平穩'
+        else:
+            signal = 'complacent'
+            interpretation = '市場樂觀，可能處於高點風險'
+        
+        return {
+            'current': round(current, 2),
+            'avg_30': round(avg_30, 2),
+            'level': level,
+            'signal': signal,
+            'trend': trend,
+            'interpretation': interpretation,
+            'data_points': len(closes)
+        }
+        
+    except Exception as e:
+        return {'error': str(e)}
+
+
+def fetch_institutional_detail(stock_code: str, days: int = 20) -> Optional[pd.DataFrame]:
+    """
+    取得法人買賣明細 (歷史數據)
+    
+    Args:
+        stock_code: 股票代碼 (如 2330)
+        days: 取得天數
+    
+    Returns:
+        DataFrame: 日期別法人買賣資料
+    """
+    import requests
+    from datetime import datetime, timedelta
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    }
+    
+    results = []
+    today = datetime.now()
+    
+    for i in range(days):
+        date = today - timedelta(days=i)
+        if date.weekday() >= 5:
+            continue
+            
+        date_str = f"{date.year}{date.month:02d}{date.day:02d}"
+        
+        params = {
+            "date": date_str,
+            "stockNo": stock_code,
+            "response": "json",
+            "language": "zh-TW"
+        }
+        
+        try:
+            resp = requests.get(
+                f"{TWSE_API_BASE}/fund/BWIBBU_d",
+                params=params,
+                headers=headers,
+                timeout=10
+            )
+            data = resp.json()
+            
+            if 'data' not in data or not data['data']:
+                continue
+            
+            for row in data['data']:
+                if len(row) >= 6:
+                    try:
+                        foreign_buy = int(row[1].replace(',', '').replace('--', '0') or '0') if row[1] != '-' else 0
+                        foreign_sell = int(row[2].replace(',', '').replace('--', '0') or '0') if row[2] != '-' else 0
+                        sec_buy = int(row[3].replace(',', '').replace('--', '0') or '0') if row[3] != '-' else 0
+                        sec_sell = 0
+                        
+                        results.append({
+                            'date': row[0],
+                            'foreign_buy': foreign_buy,
+                            'foreign_sell': foreign_sell,
+                            'foreign_net': foreign_buy - foreign_sell,
+                            'sec_buy': sec_buy,
+                            'sec_sell': sec_sell,
+                            'sec_net': sec_buy - sec_sell
+                        })
+                    except (ValueError, IndexError):
+                        continue
+                        
+        except Exception:
+            continue
+            
+        time.sleep(0.3)
+    
+    if not results:
+        return None
+    
+    df = pd.DataFrame(results)
+    df = df.drop_duplicates(subset=['date']).sort_values('date').reset_index(drop=True)
+    return df
+
+
+def analyze_institutional_trend(institutional_df: pd.DataFrame) -> Dict:
+    """
+    法人趨勢分析
+    
+    Args:
+        institutional_df: 法人買賣明細
+    
+    Returns:
+        dict: 法人趨勢分析結果
+    """
+    if institutional_df is None or institutional_df.empty:
+        return {'error': 'No institutional data'}
+    
+    try:
+        df = institutional_df.copy()
+        
+        foreign_net = df['foreign_net'].tail(5).sum() if 'foreign_net' in df.columns else 0
+        sec_net = df['sec_net'].tail(5).sum() if 'sec_net' in df.columns else 0
+        
+        foreign_buying = foreign_net > 0
+        sec_buying = sec_net > 0
+        
+        foreign_streak = 0
+        if 'foreign_net' in df.columns:
+            for net in reversed(df['foreign_net'].tolist()):
+                if net > 0:
+                    foreign_streak += 1
+                else:
+                    break
+        
+        sec_streak = 0
+        if 'sec_net' in df.columns:
+            for net in reversed(df['sec_net'].tolist()):
+                if net > 0:
+                    sec_streak += 1
+                else:
+                    break
+        
+        foreign_avg_cost = None
+        if 'foreign_buy' in df.columns and 'foreign_sell' in df.columns:
+            total_buy = df['foreign_buy'].sum()
+            total_sell = df['foreign_sell'].sum()
+            if total_buy > total_sell:
+                avg_price = df[df['foreign_net'] > 0]['date'].count() if df[df['foreign_net'] > 0].shape[0] > 0 else 0
+                foreign_avg_cost = avg_price
+        
+        sec_avg_cost = None
+        
+        signals = []
+        if foreign_buying and foreign_streak >= 3:
+            signals.append('foreign连续买入')
+        if sec_buying and sec_streak >= 3:
+            signals.append('投信连续买入')
+        
+        if foreign_buying and sec_buying:
+            signal = '利多'
+        elif not foreign_buying and not sec_buying:
+            signal = '利空'
+        elif foreign_buying:
+            signal = '外资倾向买入'
+        else:
+            signal = '中性'
+        
+        return {
+            'foreign': {
+                'buying': foreign_buying,
+                'streak': foreign_streak,
+                'net_5d': foreign_net,
+                'avg_cost': foreign_avg_cost
+            },
+            'sec': {
+                'buying': sec_buying,
+                'streak': sec_streak,
+                'net_5d': sec_net,
+                'avg_cost': sec_avg_cost
+            },
+            'signal': signal,
+            'signals': signals,
+            'data_points': len(df)
+        }
+        
+    except Exception as e:
+        return {'error': str(e)}
