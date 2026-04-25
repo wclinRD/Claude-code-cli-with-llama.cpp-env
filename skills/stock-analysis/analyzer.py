@@ -228,7 +228,7 @@ def print_report(output: dict):
     print(f"股票技術分析報告 - {output.get('ticker')}")
     print("=" * 60)
     
-    print("\n## 價格資訊")
+    print("\n## 型態與價格分析")
     pa = results.get('price_action', {})
     if pa.get('current_price'):
         print(f"現在價格: {pa['current_price']:.2f}")
@@ -237,17 +237,134 @@ def print_report(output: dict):
         if pa.get('nearest_resistance'):
             print(f"最近阻力: {pa['nearest_resistance']:.2f}")
         if pa.get('pattern') and pa['pattern'].get('pattern'):
-            print(f"型態辨識: {pa['pattern']['pattern']} (信心度: {pa['pattern']['confidence']*100:.0f}%)")
-    
-    print("\n## 均線分析")
-    ma = results.get('moving_avg', {})
-    mas = ma.get('mas', {})
-    for name, value in mas.items():
-        if value:
-            print(f"{name}: {value:.2f}")
-    if ma.get('alignment'):
-        print(f"均線排列: {ma['alignment'].get('alignment')}")
-        print(f"訊號: {ma['alignment'].get('signal')}")
+            pattern_name = pa['pattern'].get('pattern', '')
+            print(f"型態辨識: {pattern_name} (信心度: {pa['pattern']['confidence']*100:.0f}%)")
+            
+            pattern_details = pa['pattern'].get('details', {})
+            current_price = pa['current_price']
+            prof_data = output.get('professional', {})
+            mom = prof_data.get('analysis', {}).get('momentum', {})
+            if not mom:
+                mom = results.get('indicators', {}).get('momentum', {})
+            momentum_text = str(mom.get('momentum', ''))
+            is_uptrend = any(x in momentum_text for x in ['多頭', '上漲', 'short', 'bullish', 'Buy']) or '空頭' not in momentum_text and mom.get('strength', 0) > 0
+            
+            w底 = pattern_details.get('w底')
+            m頭 = pattern_details.get('m頭')
+            
+            if pattern_details.get('w底') and (is_uptrend or pattern_name == 'W底'):
+                wb = pattern_details['w底']
+                print(f"\n  ╔════════════════════════════════════════╗")
+                print(f"  ║         W底形態詳細分析               ║")
+                print(f"  ╚════════════════════════════════════════╝")
+                print(f"    📍 當前階段: {wb['stage']}")
+                print(f"       {wb['stage_desc']}")
+                print(f"")
+                print(f"    📊 形態結構:")
+                print(f"       左底:  ${wb['left_bottom']:.2f}")
+                print(f"       右底:  ${wb['right_bottom']:.2f}")
+                print(f"       頸線:  ${wb['neckline']:.2f}")
+                print(f"       深度:  ${wb['depth']:.2f} ({wb['depth']/wb['neckline']*100:.1f}%)")
+                print(f"")
+                print(f"    📈 價格位置:")
+                bp = wb['breakout_pct']
+                print(f"       現價 vs 頸線: {bp:+.1f}%")
+                if bp >= 0:
+                    print(f"       → 已突破頸線，正邁向目標")
+                else:
+                    print(f"       → 尚未突破頸線")
+                print(f"")
+                print(f"    🎯 交易策略:")
+                print(f"       第一目標: ${wb['target_1']:.2f} (+{((wb['target_1'] - current_price) / current_price * 100):.1f}%)")
+                print(f"       最終目標: ${wb['target']:.2f} (+{((wb['target'] - current_price) / current_price * 100):.1f}%)")
+                print(f"       停損價: ${wb['stop_loss']:.2f} (-{((current_price - wb['stop_loss']) / current_price * 100):.1f}%)")
+                
+                pred = wb.get('prediction', {})
+                if pred:
+                    print(f"")
+                    print(f"  ╭─────────────────────────────────────╮")
+                    print(f"  │         🔮 教你看後續怎麼走       │")
+                    print(f"  ╰─────────────────────────────────────╯")
+                    print(f"")
+                    print(f"  根據目前狀態，我預估...")
+                    print(f"  📍 {pred.get('likely_move', 'N/A')}")
+                    print(f"  📊 大概有 {pred.get('probability', 'N/A')} 的機會會這樣走")
+                    print(f"  ⏱️ 大概需要 {pred.get('time_estimate', 'N/A')} 會發生")
+                    print(f"")
+                    print(f"  📌 記住這些價位:")
+                    print(f"")
+                    print(f"     現在價:  ${current_price:.2f}")
+                    print(f"     頸線:    ${wb['neckline']:.2f} ← 守住這裡就沒事")
+                    print(f"     第一站:  ${wb['target_1']:.2f} ← 先到這裡休息")
+                    print(f"     終點站:  ${wb['target']:.2f} ← 最後目標")
+                    print(f"     停損:    ${wb['stop_loss']:.2f} ← 跌破這裡要跑")
+                    print(f"")
+                    print(f"  ⚡ 照這樣做:")
+                    for note in pred.get('注意', []):
+                        print(f"     • {note}")
+                
+            if pattern_details.get('m頭'):
+                mt = pattern_details['m頭']
+                mt_valid = mt['breakout_pct'] >= 0 or (not is_uptrend)
+                mt_invalid = mt['breakout_pct'] < 0 and current_price > mt['neckline']
+                
+                print(f"\n  ╔════════════════════════════════════════╗")
+                print(f"  ║         M頭形態詳細分析               ║")
+                print(f"  ╚════════════════════════════════════════╝")
+                if mt_invalid:
+                    print(f"    ⚠️ 形態已失效（歷史形態）")
+                print(f"    📍 當前階段: {mt['stage']}")
+                print(f"       {mt['stage_desc']}")
+                print(f"")
+                print(f"    📊 形態結構:")
+                print(f"       左頭:  ${mt['left_top']:.2f}")
+                print(f"       右頭:  ${mt['right_top']:.2f}")
+                print(f"       頸線:  ${mt['neckline']:.2f}")
+                print(f"       深度:  ${mt['depth']:.2f} ({mt['depth']/mt['neckline']*100:.1f}%)")
+                print(f"")
+                print(f"    📉 價格位置:")
+                bp = abs(mt['breakout_pct'])
+                print(f"       現價 vs 頸線: -{bp:.1f}%")
+                if mt_invalid:
+                    print(f"       ⚠️ 現價已超越頸線，此形態已失效")
+                elif mt['breakout_pct'] >= 0:
+                    print(f"       → 已跌破頸線，正邁向目標")
+                else:
+                    print(f"       → 仍在頸線上方")
+                print(f"")
+                if mt_valid and not mt_invalid:
+                    print(f"    🎯 交易策略:")
+                    print(f"       第一目標: ${mt['target_1']:.2f} (-{((current_price - mt['target_1']) / current_price * 100):.1f}%)")
+                    print(f"       最終目標: ${mt['target']:.2f} (-{((current_price - mt['target']) / current_price * 100):.1f}%)")
+                    print(f"       停損價: ${mt['stop_loss']:.2f} (+{((mt['stop_loss'] - current_price) / current_price * 100):.1f}%)")
+                
+                pred = mt.get('prediction', {})
+                if pred:
+                    print(f"")
+                    print(f"  ╭─────────────────────────────────────╮")
+                    print(f"  │         🔮 教你看後續怎麼走       │")
+                    print(f"  ╰─────────────────────────────────────╯")
+                    print(f"")
+                    print(f"  根據目前狀態，我預估...")
+                    print(f"  📍 {pred.get('likely_move', 'N/A')}")
+                    print(f"  📊 大概有 {pred.get('probability', 'N/A')} 的機會會這樣走")
+                    print(f"  ⏱️ 大概需要 {pred.get('time_estimate', 'N/A')} 會發生")
+                    print(f"")
+                    print(f"  📌 記住這些價位:")
+                    print(f"")
+                    print(f"     停損:    ${mt['stop_loss']:.2f} ← 漲過這裡要小心")
+                    print(f"     頸線:    ${mt['neckline']:.2f} ← 重要關卡")
+                    print(f"     第一站:  ${mt['target_1']:.2f} ← 先到這裡")
+                    print(f"     終點站:  ${mt['target']:.2f} ← 最後目標")
+                    print(f"     現在價:  ${current_price:.2f}")
+                    print(f"")
+                    print(f"  ⚡ 照這樣做:")
+                    for note in pred.get('注意', []):
+                        print(f"     • {note}")
+                
+                if mt_invalid:
+                    print(f"")
+                    print(f"    💡 參考: 此形態已無交易價值，僅供歷史參考")
     
     print("\n## 技術指標")
     ind = results.get('indicators', {})
