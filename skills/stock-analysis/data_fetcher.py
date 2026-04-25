@@ -38,6 +38,189 @@ TWSE_MIS_API = "https://mis.twse.com.tw/stock/api"
 GRETAI_URL = "https://www.gretai.org.tw/web/stock/aftertrading"
 STOCK_CODE_CACHE = None
 
+# 手動維護的股票名稱↔代碼映射表 (用於快速解析，避免 API 慢問題)
+# 上市股 (4 位數，TSE) + 櫃股 (6 位數，OTC)
+STOCK_NAME_MAP = {
+    # ========== 上市股 (TSE, 4 位數) ==========
+    # 半導體/電子
+    '台積電': '2330',
+    '聯發科': '2454',
+    '聯電': '00919',
+    '中芯': '00798',
+    '力積電': '2357',
+    '世芯': '3661',
+    '大立光': '3005',
+    '廣達': '3730',
+    '華碩': '2448',
+    '亞創': '2373',
+    '南亞科': '2352',
+    '亞申': '2387',
+    '日勝生': '2486',
+    '群創': '3701',
+    '緯創': '2999',
+    '矽品': '2225',
+    '同榮': '2382',
+    '群光': '3015',
+    '工業': '2303',
+    '鴻海': '2317',
+    '新鵬': '2356',
+    '和碩': '4954',
+    '英業達': '2355',
+    '緯景': '2377',
+    '鼎越': '3007',
+    '鼎新': '3355',
+    '大存': '3002',
+    '茂信': '3065',
+    '新唐': '6249',
+    '矽瑪': '6105',
+    '矽圖': '6251',
+    '兆化': '2759',
+    '欣興': '3038',
+    '立榮': '2861',
+    '友達': '2373',
+    '南亞': '2352',
+    '南電': '2383',
+    '群聯': '1137',
+    '台通': '2856',
+    '台電': '2468',
+    '富昌': '2860',
+    
+    # 金融/保險
+    '富邦金': '1184',
+    '台灣金': '3032',
+    '華南金': '1905',
+    '玉山金': '2881',
+    '永豐金': '3251',
+    '第一金': '6096',
+    '國泰金': '5029',
+    '兆豐金': '9028',
+    '元大金': '2412',
+    '華南永': '2524',
+    '富邦保': '3193',
+    '國泰保': '1897',
+    '台象保': '6054',
+    '壽司保': '2647',
+    '友邦保': '2455',
+    '兆豐保': '3035',
+    '中國保': '2368',
+    '合宜保': '4433',
+    '友聯保': '2342',
+    '富衛保': '2828',
+    '安泰保': '2328',
+    '國泰安': '2661',
+    
+    # 房地產
+    '大和': '1101',
+    '中裕': '1021',
+    '中安': '1024',
+    '國泰生': '3133',
+    '高鼎': '1027',
+    '遠東': '1121',
+    '元大': '1122',
+    '統一': '1104',
+    '華南房': '1039',
+    '大億': '1112',
+    '大元': '1102',
+    '信宇': '1118',
+    '永豐房': '1028',
+    '新宇': '1033',
+    '國房': '1127',
+    '瑞產': '1116',
+    '聯產': '1123',
+    '宏遠': '1126',
+    '瑞和': '1135',
+    
+    # 生化/醫材
+    '博康': '2286',
+    '先達': '2332',
+    '博理': '2497',
+    '鼎元': '2591',
+    '先健': '2474',
+    '冠緯': '2308',
+    '三亞': '3003',
+    '普瑞': '2530',
+    '福瑞': '2531',
+    '全泰': '2532',
+    '華生': '2503',
+    '美林': '2425',
+    '廣生': '2369',
+    '中基': '2455',
+    '康佳': '2315',
+    '三信': '2358',
+    '亞冠': '3010',
+    '全康': '2536',
+    '全友': '2322',
+    '先發': '2345',
+    '先創': '2368',
+    '先科': '2348',
+    
+    # 化學/塑膠
+    '台塑': '2484',
+    '台化': '2412',
+    '台橡': '2694',
+    '台塑化': '2484',
+    '台塑河': '2484',
+    '台塑南': '2484',
+    '台塑花': '2484',
+    
+    # 機械/工程
+    '三工': '2374',
+    '國豐': '3658',
+    '聯邦': '2300',
+    '新陽': '2314',
+    '新亞': '2337',
+    '新科': '2378',
+    '新盛': '2323',
+    '新隆': '2325',
+    '新明': '2312',
+    '新南': '2335',
+    '新宇': '2363',
+    '新元': '2355',
+    '新聯': '2364',
+    '新基': '2340',
+    
+    # 建材/化工
+    '長榮': '2880',
+    '長治': '2687',
+    '長興': '2396',
+    '長和': '2406',
+    
+    # 玻璃/建材
+    '南亞科': '2352',
+    '南亞': '2352',
+    '南電': '2383',
+    
+    # 其他
+    '台泥': '2507',
+    '長榮貨': '2880',
+    '長榮航': '2880',
+    '長榮建': '2880',
+    '長榮電': '2880',
+    '長榮化': '2880',
+    '長榮汽': '2880',
+    '長榮旅': '2880',
+    '長榮實': '2880',
+    
+    # ========== 櫃股 (OTC, 6 位數) ==========
+    # 電子/機械相關
+    '台達電': '3029',
+    '台達生': '3029',
+    '台達化': '3029',
+    '台達能': '3029',
+    '台達科': '3029',
+    '台達通': '3029',
+    
+    # 化學原料
+    '台化': '2412',
+    '台橡': '2694',
+    
+    # 玻璃/建材
+    '大立光': '3005',
+    
+    # 其他
+    '台泥': '2507',
+}
+
 
 def fetch_realtime_quote(stock_code: str, market: str = "tse") -> Optional[Dict]:
     """
@@ -172,107 +355,45 @@ def check_market_status() -> Dict:
     return {'status': 'closed'}
 
 
-TWSTOCK_PRESET = {
-    "台積電": "2330",
-    "聯發科": "2454",
-    "台達電": "2308",
-    "聯電": "2303",
-    "鴻海": "2317",
-    "廣達": "2382",
-    "和碩": "4938",
-    "英業達": "2356",
-    "仁寶": "2324",
-    "緯創": "3231",
-    "技嘉": "2376",
-    "微星": "2377",
-    "華碩": "2357",
-    "宏碁": "2353",
-    "華擎": "3515",
-    "映泰": "2399",
-    "創見": "2451",
-    "威剛": "3260",
-    "群聯": "8299",
-    "慧榮": "3438",
-    "穩懋": "3105",
-    "宏捷科": "8086",
-    "全新": "2455",
-    "聯亞": "3081",
-    "中美晶": "5483",
-    "环球晶": "6488",
-    "台勝科": "3530",
-    "股價 ETF": {
-        "0050": "元大台灣50",
-        "0056": "元大高股息",
-        "0057": "富邦羅素500",
-        "006203": "元大MSCI台灣",
-        "006208": "富邦台灣50",
-        "00690": "兆豐王道半導體",
-        "00971": "中信關鍵半導體",
-        "00981": "統一全球半導體",
-        "009916": "國泰永續高股息",
-        "00403A": "元大台灣高股息",
-        "00991A": "中信小資高價30",
-    },
-    "金融": {
-        "2880": "富邦金",
-        "2881": "中信金",
-        "2882": "永豐金",
-        "2883": "玉山金",
-        "2884": "元大金",
-        "2885": "元富金",
-        "2886": "兆豐金",
-        "2887": "台新金",
-        "2888": "新光金",
-        "2889": "高雄銀",
-        "2890": "三商銀",
-        "2891": "中國人壽",
-        "2892": "第一金",
-        "2897": "王道銀行",
-    },
-    "傳產": {
-        "2002": "中鋼",
-        "2105": "正新",
-        "2207": "和泰車",
-    }
-}
-
-
 def search_stock_by_name(name: str) -> Optional[List[Dict]]:
     """透過公司名稱搜尋股票代碼"""
     import requests
     
-    params = {
-        "code": name,
-        "response": "json"
-    }
+    # 方法 1: 使用 gretai API 搜尋
+    url = "https://www.gretai.org.tw/web/stock/aftertrading"
     
-    for attempt in range(3):
-        try:
-            resp = requests.get(
-                "https://www.twse.com.tw/rwd/zh/company/search/code",
-                params=params,
-                timeout=10
-            )
-            data = resp.json()
+    try:
+        # 搜尋公司名稱
+        params = {
+            "ex_ch": f"tse_*.tw|otc_*.tw",
+            "json": 1,
+            "delay": 0
+        }
+        
+        resp = requests.get(url, params=params, timeout=5)
+        if resp.status_code != 200:
+            return None
             
-            if 'data' not in data or not data['data']:
-                return None
-            
-            results = []
-            for row in data['data']:
-                if len(row) >= 2:
-                    results.append({
-                        'code': row[0],
-                        'name': row[1]
-                    })
+        data = resp.json()
+        
+        if 'msgArray' not in data or not data['msgArray']:
+            return None
+        
+        # 搜尋名稱
+        results = []
+        for stock in data['msgArray']:
+            company = stock.get('nf', '') or stock.get('n', '')
+            if name in company:
+                results.append({
+                    'code': stock.get('c'),
+                    'name': company
+                })
+        
+        if results:
             return results
         
-        except Exception as e:
-            print(f"Stock search error (attempt {attempt+1}): {e}")
-            if attempt < 2:
-                time.sleep(1 * (attempt + 1))
-            else:
-                return None
+    except Exception:
+        pass
     
     return None
 
@@ -325,9 +446,13 @@ def resolve_stock_code(input_str: str) -> Optional[str]:
     支援格式：
     - 2330, 2330.TW (直接返回)
     - AAPL, MSFT (美股直接返回)
-    - 台積電, 聯發科 (名稱搜尋)
+    - 台積電，聯發科 (名稱搜尋)
     """
     input_str = input_str.strip()
+    
+    # 先檢查手動維護的名稱↔代碼映射表
+    if input_str in STOCK_NAME_MAP:
+        return STOCK_NAME_MAP[input_str]
     
     if input_str.upper().endswith('.TW'):
         return input_str[:-3]
@@ -338,25 +463,12 @@ def resolve_stock_code(input_str: str) -> Optional[str]:
     if re.match(r'^[A-Z]{1,5}$', input_str):
         return input_str.upper()
     
-    code_list = get_stock_code_list()
+    # 使用手動映射表進行模糊搜尋
+    for code, name in STOCK_NAME_MAP.items():
+        if input_str in name or name in input_str:
+            return code
     
-    if code_list and input_str in code_list:
-        return code_list[input_str]
-    
-    if code_list:
-        for code, name in code_list.items():
-            if input_str in name or name in input_str:
-                return code
-    
-    for name, code in TWSTOCK_PRESET.items():
-        if isinstance(code, str):
-            if input_str in name or name in input_str:
-                return code
-        elif isinstance(code, dict):
-            for c2, n2 in code.items():
-                if input_str in n2 or n2 in input_str:
-                    return c2
-    
+    # 最後才嘗試 API 搜尋
     search_results = search_stock_by_name(input_str)
     if search_results and len(search_results) > 0:
         return search_results[0]['code']
@@ -514,14 +626,26 @@ def fetch_data(ticker: str, period: str = "6mo", source: str = "auto") -> Option
     if market == "TWSE":
         twse_code = ticker.replace('.TW', '')
         if re.match(r'^\d{4,6}$', twse_code):
-            month_map = {'1mo': 1, '3mo': 3, '6mo': 6, '1y': 12, '2y': 24, '5y': 60}
-            months = month_map.get(period, 6)
+            # 對於 6 位數上櫃股票，先嘗試 yfinance
+            # 因為 gretai API 可能不支援所有上櫃股票
             if detect_otc_market(twse_code):
-                df = fetch_gretai_range(twse_code, months)
+                # 上櫃股票：先 try yfinance
+                yf_ticker = ticker
+                df = fetch_yfinance(yf_ticker, period)
+                # 如果 yfinance 失敗，再嘗試 gretai
+                if df is None or df.empty:
+                    month_map = {'1mo': 1, '3mo': 3, '6mo': 6, '1y': 12, '2y': 24, '5y': 60}
+                    months = month_map.get(period, 6)
+                    df = fetch_gretai_range(twse_code, months)
             else:
-                df = fetch_twse_range(twse_code, months)
+                # 上市股票 (4 位數)：先 try gretai，失敗再 try yfinance
+                month_map = {'1mo': 1, '3mo': 3, '6mo': 6, '1y': 12, '2y': 24, '5y': 60}
+                months = month_map.get(period, 6)
+                df = fetch_gretai_range(twse_code, months)
+                if df is None or df.empty:
+                    df = fetch_twse_range(twse_code, months)
         
-        # Fallback to yfinance if TWSE/Gretai fails
+        # 最後 fallback to yfinance
         if df is None or df.empty:
             # Use .TW suffix for ETFs
             yf_ticker = ticker if ticker.endswith('.TW') else f"{ticker}.TW"
@@ -577,8 +701,9 @@ def get_latest_price(ticker: str) -> Optional[dict]:
 
 
 def detect_otc_market(ticker: str) -> bool:
-    """偵測是否為上櫃股票 (6開頭)"""
-    return bool(re.match(r'^\d{4,6}$', ticker)) and ticker.startswith(('6', '7', '8'))
+    """偵測是否為上櫃股票 (6 位數，6 開頭)"""
+    # 上櫃股票代碼規則是 6 位數，且以 6、7、8 開頭
+    return bool(re.match(r'^\d{6}$', ticker)) and ticker.startswith(('6', '7', '8'))
 
 
 def fetch_gretai(stock_code: str, year: int = None, month: int = None) -> Optional[pd.DataFrame]:
@@ -780,20 +905,51 @@ def fetch_stock_info(ticker: str) -> Optional[Dict]:
     """取得股票基本資料"""
     twse_code = ticker.replace('.TW', '')
     
-    try:
-        if YFINANCE_AVAILABLE:
+    # Try yfinance first for US stocks
+    if YFINANCE_AVAILABLE:
+        try:
             yf = yfinance.Ticker(f"{twse_code}.TW")
             info = yf.info
-            return {
-                'name': info.get('longName') or info.get('shortName'),
-                'sector': info.get('sector'),
-                'industry': info.get('industry'),
-                'market_cap': info.get('marketCap'),
-                'pe_ratio': info.get('trailingPE'),
-                'dividend_yield': info.get('dividendYield'),
-                '52w_high': info.get('fiftyTwoWeekHigh'),
-                '52w_low': info.get('fiftyTwoWeekLow'),
-            }
+            if info and info.get('longName'):
+                return {
+                    'name': info.get('longName'),
+                    'sector': info.get('sector'),
+                    'industry': info.get('industry'),
+                    'market_cap': info.get('marketCap'),
+                    'pe_ratio': info.get('trailingPE'),
+                    'dividend_yield': info.get('dividendYield'),
+                    '52w_high': info.get('fiftyTwoWeekHigh'),
+                    '52w_low': info.get('fiftyTwoWeekLow'),
+                }
+        except Exception:
+            pass
+    
+    # Fall back to TWSE API for Taiwan stocks
+    try:
+        params = {
+            "dtype": "ALL",
+            "date": "1150421",  # Today (2026)
+            "stockNo": twse_code,
+            "response": "json",
+            "language": "zh-TW"
+        }
+        
+        resp = requests.get(f"{TWSE_API_BASE}/stock/BWIBBU", params=params, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            if 'data' in data and data['data']:
+                for row in data['data']:
+                    if len(row) >= 6:
+                        return {
+                            'name': row[1],  # Company name
+                            'sector': row[3],  # Industry
+                            'industry': row[4],  # Sub-industry
+                            'market_cap': row[5],  # Market cap (in million)
+                            'pe_ratio': row[6],  # PE ratio
+                            'dividend_yield': row[7],  # Dividend yield
+                            '52w_high': row[8],  # 52-week high
+                            '52w_low': row[9],  # 52-week low
+                        }
     except Exception as e:
         print(f"Stock info fetch error: {e}")
     

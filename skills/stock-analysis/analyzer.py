@@ -14,7 +14,7 @@ from data_fetcher import (
     fetch_data, get_latest_price, fetch_institutional_holdings, 
     fetch_margin_short, fetch_stock_info, fetch_daily_summary, fetch_industry_performance,
     detect_otc_market, fetch_gretai_range, detect_market, fetch_macro_data,
-    fetch_all_news, fetch_stock_news_by_keyword, resolve_stock_code, search_stock_by_name
+    fetch_all_news, fetch_stock_news_by_keyword, resolve_stock_code
 )
 from price_action import analyze_price_action
 from moving_avg import analyze_moving_avg, calculate_mas
