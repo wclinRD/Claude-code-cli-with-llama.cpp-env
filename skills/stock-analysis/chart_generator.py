@@ -293,10 +293,15 @@ def generate_candlestick_svg(df: pd.DataFrame, width: int = 800, height: int = 4
     
     ma_svg = "\n".join(ma_paths.values())
     
+    date_start = recent.iloc[0]['Date']
+    date_end = recent.iloc[-1]['Date']
+    date_start_str = date_start.strftime('%Y-%m-%d') if hasattr(date_start, 'strftime') else str(date_start)[:10]
+    date_end_str = date_end.strftime('%Y-%m-%d') if hasattr(date_end, 'strftime') else str(date_end)[:10]
+    
     svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}">
   <rect width="{width}" height="{height}" fill="#1a1a2e"/>
-  <text x="{padding}" y="25" fill="#888" font-size="11" font-family="monospace">{recent.iloc[0]['Date'].strftime('%Y-%m-%d' if hasattr(recent.iloc[0]['Date'], 'strftime') else str(recent.iloc[0]['Date'])[:10])}</text>
-  <text x="{width-padding}" y="25" fill="#888" font-size="11" font-family="monospace" text-anchor="end">{recent.iloc[-1]['Date'].strftime('%Y-%m-%d' if hasattr(recent.iloc[-1]['Date'], 'strftime') else str(recent.iloc[-1]['Date'])[:10]}</text>
+  <text x="{padding}" y="25" fill="#888" font-size="11" font-family="monospace">{date_start_str}</text>
+  <text x="{width-padding}" y="25" fill="#888" font-size="11" font-family="monospace" text-anchor="end">{date_end_str}</text>
   {candle_svg}
   {ma_svg}
   <line x1="{padding}" y1="{padding}" x2="{padding}" y2="{height-padding}" stroke="#333" stroke-width="1"/>
