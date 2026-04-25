@@ -23,8 +23,10 @@ def calculate_rsi(df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
     avg_gain = gain.rolling(window=period, min_periods=period).mean()
     avg_loss = loss.rolling(window=period, min_periods=period).mean()
     
-    rs = avg_gain / avg_loss
+    rs = np.where(avg_loss == 0, 100, avg_gain / avg_loss)
     df['RSI'] = 100 - (100 / (1 + rs))
+    
+    df['RSI'] = df['RSI'].fillna(50)
     
     return df
 
@@ -56,7 +58,9 @@ def calculate_kd(df: pd.DataFrame, n: int = 9, m1: int = 3, m2: int = 3) -> pd.D
     low_n = df['Low'].rolling(window=n).min()
     high_n = df['High'].rolling(window=n).max()
     
-    rsv = (df['Close'] - low_n) / (high_n - low_n) * 100
+    denom = high_n - low_n
+    denom = denom.replace(0, np.nan)
+    rsv = (df['Close'] - low_n) / denom * 100
     rsv = rsv.fillna(50)
     
     df['K'] = rsv.ewm(span=m1, adjust=False).mean()
@@ -223,7 +227,10 @@ def calculate_williams_r(df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
     highest_high = df['High'].rolling(window=period).max()
     lowest_low = df['Low'].rolling(window=period).min()
     
-    df['Williams_R'] = -((highest_high - df['Close']) / (highest_high - lowest_low)) * 100
+    denom = highest_high - lowest_low
+    denom = denom.replace(0, np.nan)
+    df['Williams_R'] = -((highest_high - df['Close']) / denom) * 100
+    df['Williams_R'] = df['Williams_R'].fillna(-50)
     
     return df
 
@@ -239,7 +246,10 @@ def calculate_cci(df: pd.DataFrame, period: int = 20) -> pd.DataFrame:
     sma = typical_price.rolling(window=period).mean()
     mean_deviation = typical_price.rolling(window=period).apply(lambda x: abs(x - x.mean()).mean())
     
-    df['CCI'] = (typical_price - sma) / (0.015 * mean_deviation)
+    denom = 0.015 * mean_deviation
+    denom = denom.replace(0, np.nan)
+    df['CCI'] = (typical_price - sma) / denom
+    df['CCI'] = df['CCI'].fillna(0)
     
     return df
 
@@ -259,6 +269,7 @@ def calculate_dmi(df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
     
     atr = df['High'] - df['Low']
     atr = atr.rolling(window=period).mean()
+    atr = atr.replace(0, np.nan)
     
     df['Plus_DM'] = plus_dm.rolling(window=period).mean()
     df['Minus_DM'] = minus_dm.rolling(window=period).mean()
@@ -267,8 +278,11 @@ def calculate_dmi(df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
     df['Minus_DI'] = (df['Minus_DM'] / atr) * 100
     
     di_sum = df['Plus_DI'] + df['Minus_DI']
+    di_sum = di_sum.replace(0, np.nan)
     df['DX'] = (abs(df['Plus_DI'] - df['Minus_DI']) / di_sum) * 100
+    df['DX'] = df['DX'].fillna(0)
     df['ADX'] = df['DX'].rolling(window=period).mean()
+    df['ADX'] = df['ADX'].fillna(0)
     
     return df
 

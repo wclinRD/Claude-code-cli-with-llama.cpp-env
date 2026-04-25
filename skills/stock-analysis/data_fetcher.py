@@ -431,7 +431,7 @@ def fetch_twse(stock_code: str, year: Optional[int] = None, month: Optional[int]
                 month = int(parts[1])
                 day = int(parts[2])
                 return pd.Timestamp(year=year, month=month, day=day)
-            except:
+            except Exception:
                 return pd.NaT
         
         def parse_num(val):
@@ -451,7 +451,7 @@ def fetch_twse(stock_code: str, year: Optional[int] = None, month: Optional[int]
                         'Close': parse_num(row[6]),
                         'Volume': int(parse_num(row[2]))
                     })
-                except:
+                except Exception:
                     continue
         
         if records:
@@ -616,7 +616,7 @@ def fetch_gretai(stock_code: str, year: int = None, month: int = None) -> Option
                         'Close': int(row[6].replace(',', '')) if row[6] != '-' else 0,
                         'Volume': int(row[2].replace(',', '')) if row[2] != '-' else 0
                     })
-                except:
+                except Exception:
                     continue
         
         if records:
@@ -730,7 +730,7 @@ def fetch_margin_short(stock_code: str) -> Optional[Dict]:
                         'short_change': row[7],
                         'date': row[0]
                     }
-                except:
+                except Exception:
                     pass
         
         return None
@@ -1320,7 +1320,7 @@ def fetch_stock_news_by_keyword(keyword: str = "台股") -> List[Dict]:
                             'title': title.text[:55],
                             'source': 'Google'
                         })
-        except:
+        except Exception:
             continue
     
     seen = set()
@@ -1368,7 +1368,7 @@ def fetch_tech_news() -> List[Dict]:
                         text = t.get_text(strip=True)
                         if 15 < len(text) < 60:
                             results.append({'title': text[:55], 'source': source})
-            except:
+            except Exception:
                 continue
         
         return results[:6]

@@ -1,10 +1,48 @@
 # Stock-Analysis Skill 修改計劃
 
-## 執行狀態: ✅ Phase 4 完成
+## 執行狀態: 🔄 Phase 5 進行中
 
 ---
 
-## Phase 4: 驗證與強化 ✅
+## Phase 5: 錯誤處理強化與除錯 🔄
+
+### P5.1: 評估發現的問題
+
+| 優先度 | 問題 | 檔案 | 狀態 |
+|--------|------|------|------|
+| 🔴 高 | RSI 除零風險 (line 26) | indicators.py | 🔄 修復中 |
+| 🔴 高 | 裸異常處理 (38處) | data_fetcher.py | 🔄 修復中 |
+| 🟡 中 | 缺少 lxml 依賴 | requirements.txt | 🔄 修復中 |
+| 🟡 中 | pytest.mark.integration 未註冊 | tests/conftest.py | 🔄 修復中 |
+| 🟢 低 | 日誌系統缺失 | 全域 | ⚪ 待處理 |
+| 🟢 低 | 技術指標擴展 | indicators.py | ⚪ 待處理 |
+
+### P5.2: 修復進度
+
+```
+[x] indicators.py RSI 除零修復
+[x] data_fetcher.py 異常處理強化
+[x] requirements.txt 依賴補全
+[x] pytest 標記註冊
+[x] 測試驗證: 158 passed ✅
+```
+
+### P5.3: 修復明細
+
+| 檔案 | 修復內容 |
+|------|----------|
+| indicators.py:26 | RSI 除零: 使用 np.where() 處理 avg_loss=0 |
+| indicators.py:61 | KD 除零: denom.replace(0, np.nan) |
+| indicators.py:230 | Williams%R 除零: 添加分母保護 |
+| indicators.py:246 | CCI 除零: 添加分母保護 |
+| indicators.py:264-277 | DMI 除零: atr 和 di_sum 保護 |
+| data_fetcher.py:434,454,619,733,1323,1371 | 裸異常改為 `except Exception` |
+| requirements.txt | 新增 lxml, pytest |
+| tests/conftest.py | 註冊 pytest.mark.integration |
+
+---
+
+## Phase 0-4: 已完成 ✅
 
 ### P4.1: 測試驗證結果
 

@@ -7,6 +7,11 @@ import numpy as np
 from datetime import datetime, timedelta
 
 
+def pytest_configure(config):
+    """註冊自訂標記"""
+    config.addinivalue_line("markers", "integration: 整合測試 (需要網路連線)")
+
+
 @pytest.fixture
 def sample_price_data():
     """標準價格數據 (足夠計算所有指標)"""
