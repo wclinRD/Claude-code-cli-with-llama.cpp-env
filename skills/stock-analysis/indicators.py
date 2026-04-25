@@ -177,3 +177,174 @@ def detect_divergence(df: pd.DataFrame, indicator: str = 'RSI', lookback: int = 
             return {'divergence': 'bearish_divergence', 'description': '價格新高但 RSI 未破高'}
     
     return {'divergence': None}
+
+
+def calculate_bollinger_bands(df: pd.DataFrame, period: int = 20, std_dev: float = 2.0) -> pd.DataFrame:
+    """計算布林帶"""
+    if df is None or len(df) < period:
+        return df
+    
+    df = df.copy()
+    
+    df['BB_Middle'] = df['Close'].rolling(window=period).mean()
+    rolling_std = df['Close'].rolling(window=period).std()
+    df['BB_Upper'] = df['BB_Middle'] + (rolling_std * std_dev)
+    df['BB_Lower'] = df['BB_Middle'] - (rolling_std * std_dev)
+    df['BB_Width'] = (df['BB_Upper'] - df['BB_Lower']) / df['BB_Middle'] * 100
+    
+    return df
+
+
+def calculate_atr(df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
+    """計算 ATR 平均真實波幅"""
+    if df is None or len(df) < period:
+        return df
+    
+    df = df.copy()
+    
+    high_low = df['High'] - df['Low']
+    high_close = abs(df['High'] - df['Close'].shift())
+    low_close = abs(df['Low'] - df['Close'].shift())
+    
+    true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+    df['ATR'] = true_range.rolling(window=period).mean()
+    df['ATR_Pct'] = (df['ATR'] / df['Close']) * 100
+    
+    return df
+
+
+def calculate_williams_r(df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
+    """計算威廉指標"""
+    if df is None or len(df) < period:
+        return df
+    
+    df = df.copy()
+    
+    highest_high = df['High'].rolling(window=period).max()
+    lowest_low = df['Low'].rolling(window=period).min()
+    
+    df['Williams_R'] = -((highest_high - df['Close']) / (highest_high - lowest_low)) * 100
+    
+    return df
+
+
+def calculate_cci(df: pd.DataFrame, period: int = 20) -> pd.DataFrame:
+    """計算 CCI 商品通道指標"""
+    if df is None or len(df) < period:
+        return df
+    
+    df = df.copy()
+    
+    typical_price = (df['High'] + df['Low'] + df['Close']) / 3
+    sma = typical_price.rolling(window=period).mean()
+    mean_deviation = typical_price.rolling(window=period).apply(lambda x: abs(x - x.mean()).mean())
+    
+    df['CCI'] = (typical_price - sma) / (0.015 * mean_deviation)
+    
+    return df
+
+
+def calculate_dmi(df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
+    """計算 DMI 趨向指標"""
+    if df is None or len(df) < period + 1:
+        return df
+    
+    df = df.copy()
+    
+    high_diff = df['High'].diff()
+    low_diff = -df['Low'].diff()
+    
+    plus_dm = high_diff.where((high_diff > low_diff) & (high_diff > 0), 0)
+    minus_dm = low_diff.where((low_diff > high_diff) & (low_diff > 0), 0)
+    
+    atr = df['High'] - df['Low']
+    atr = atr.rolling(window=period).mean()
+    
+    df['Plus_DM'] = plus_dm.rolling(window=period).mean()
+    df['Minus_DM'] = minus_dm.rolling(window=period).mean()
+    
+    df['Plus_DI'] = (df['Plus_DM'] / atr) * 100
+    df['Minus_DI'] = (df['Minus_DM'] / atr) * 100
+    
+    di_sum = df['Plus_DI'] + df['Minus_DI']
+    df['DX'] = (abs(df['Plus_DI'] - df['Minus_DI']) / di_sum) * 100
+    df['ADX'] = df['DX'].rolling(window=period).mean()
+    
+    return df
+
+
+def calculate_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
+    """計算所有技術指標"""
+    df = calculate_rsi(df)
+    df = calculate_macd(df)
+    df = calculate_kd(df)
+    df = calculate_obv(df)
+    df = calculate_bollinger_bands(df)
+    df = calculate_atr(df)
+    df = calculate_williams_r(df)
+    df = calculate_cci(df)
+    df = calculate_dmi(df)
+    return df
+
+
+def analyze_advanced_signals(df: pd.DataFrame) -> Dict:
+    """分析進階技術指標訊號"""
+    if df is None or len(df) < 30:
+        return {'error': 'Insufficient data'}
+    
+    df = calculate_all_indicators(df)
+    
+    latest = df.iloc[-1]
+    signals = []
+    
+    bb = latest.get('BB_Upper'), latest.get('BB_Middle'), latest.get('BB_Lower')
+    if all(bb):
+        if latest['Close'] > bb[0]:
+            signals.append({'indicator': 'BB', 'signal': 'overbought', 'value': f"價格超越上軌", 'action': 'sell'})
+        elif latest['Close'] < bb[2]:
+            signals.append({'indicator': 'BB', 'signal': 'oversold', 'value': f"價格跌破下軌", 'action': 'buy'})
+        else:
+            signals.append({'indicator': 'BB', 'signal': 'neutral', 'value': f"中軌:{bb[1]:.2f}", 'action': 'hold'})
+    
+    atr = latest.get('ATR')
+    if atr:
+        signals.append({'indicator': 'ATR', 'signal': 'volatility', 'value': round(atr, 2), 'action': 'info'})
+    
+    wr = latest.get('Williams_R')
+    if wr:
+        if wr < -80:
+            signals.append({'indicator': 'Williams_R', 'signal': 'oversold', 'value': round(wr, 2), 'action': 'buy'})
+        elif wr > -20:
+            signals.append({'indicator': 'Williams_R', 'signal': 'overbought', 'value': round(wr, 2), 'action': 'sell'})
+        else:
+            signals.append({'indicator': 'Williams_R', 'signal': 'neutral', 'value': round(wr, 2), 'action': 'hold'})
+    
+    cci = latest.get('CCI')
+    if cci:
+        if cci > 100:
+            signals.append({'indicator': 'CCI', 'signal': 'overbought', 'value': round(cci, 2), 'action': 'sell'})
+        elif cci < -100:
+            signals.append({'indicator': 'CCI', 'signal': 'oversold', 'value': round(cci, 2), 'action': 'buy'})
+        else:
+            signals.append({'indicator': 'CCI', 'signal': 'neutral', 'value': round(cci, 2), 'action': 'hold'})
+    
+    plus_di = latest.get('Plus_DI')
+    minus_di = latest.get('Minus_DI')
+    adx = latest.get('ADX')
+    if plus_di and minus_di and adx:
+        if plus_di > minus_di and adx > 25:
+            signals.append({'indicator': 'DMI', 'signal': 'uptrend', 'value': f"+DI:{plus_di:.1f}, -DI:{minus_di:.1f}, ADX:{adx:.1f}", 'action': 'buy'})
+        elif minus_di > plus_di and adx > 25:
+            signals.append({'indicator': 'DMI', 'signal': 'downtrend', 'value': f"+DI:{plus_di:.1f}, -DI:{minus_di:.1f}, ADX:{adx:.1f}", 'action': 'sell'})
+        else:
+            signals.append({'indicator': 'DMI', 'signal': 'neutral', 'value': f"ADX:{adx:.1f}", 'action': 'hold'})
+    
+    return {
+        'bollinger_bands': {'upper': round(bb[0], 2) if bb[0] else None, 'middle': round(bb[1], 2) if bb[1] else None, 'lower': round(bb[2], 2) if bb[2] else None},
+        'atr': round(atr, 2) if atr else None,
+        'atr_pct': round(latest.get('ATR_Pct', 0), 2),
+        'williams_r': round(wr, 2) if wr else None,
+        'cci': round(cci, 2) if cci else None,
+        'dmi': {'plus_di': round(plus_di, 2) if plus_di else None, 'minus_di': round(minus_di, 2) if minus_di else None, 'adx': round(adx, 2) if adx else None},
+        'signals': signals
+    }
