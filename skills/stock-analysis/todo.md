@@ -1,10 +1,36 @@
 # Stock-Analysis Skill 修改計劃
 
-## 執行狀態: ✅ Phase 3 完成
+## 執行狀態: ✅ Phase 4 完成
 
 ---
 
-## Phase 0: 緊急修復 (Critical Bug Fixes) 🔴
+## Phase 4: 驗證與強化 ✅
+
+### P4.1: 測試驗證結果
+
+```
+158 tests collected
+158 passed ✅
+```
+
+### P4.2: 已修正項目
+
+| 狀態 | 項目 | 說明 |
+|------|------|------|
+| ✅ | detect_market() | 美股回傳 "NASDAQ" (而非 "US") |
+| ✅ | resolve_stock_code() | 新增美股代碼直接返回邏輯 |
+| ✅ | API 重試機制 | get_stock_code_list() / search_stock_by_name() 失敗時自動重試 3 次 |
+
+### P4.3: 未來強化 (暂不執行) ⚪
+
+| 優先度 | 項目 | 說明 |
+|--------|------|------|
+| 🟡 中 | 輸入驗證 | 股票代碼格式驗證 |
+| 🟢 低 | 更多技術指標 | STOCHRSI, ADX 等 |
+
+---
+
+## Phase 0-3: 已完成 ✅
 
 ### P0.1: indicators.py 除零問題修復
 
@@ -95,11 +121,23 @@ tests/
 
 ## 未來強化 (暂不執行) ⚪
 
-- API 重試機制
-- 快取機制
-- 輸入驗證裝飾器
-- 更多技術指標
-- data_fetcher.py 穩健性強化
+### 優先強化項目
+
+| 優先度 | 項目 | 說明 |
+|--------|------|------|
+| 🔴 高 | API 重試機制 | data_fetcher.py 網路請求失敗時自動重試 |
+| 🔴 高 | 快取機制 | 避免重複 API 呼叫造成浪費 |
+| 🟡 中 | 輸入驗證 | 股票代碼格式驗證 |
+| 🟡 中 | quote.py 函數補全 | get_latest_price 函數 |
+| 🟢 低 | 更多技術指標 | STOCHRSI, ADX 等 |
+
+### 發現的潛在問題
+
+| 狀態 | 項目 | 說明 |
+|------|------|------|
+| ⚠️ | detect_market() 回傳 "US" | 與預期 "NASDAQ" 不同 |
+| ⚠️ | quote.py 缺少 get_latest_price | 需要從 data_fetcher 導入或補全 |
+| ✅ | 測試覆蓋 | 153 個測試全部通過 |
 
 ---
 
@@ -112,11 +150,6 @@ tests/
 - [x] P1.2 均線彈性化 → 已實作
 - [x] P2 測試框架 → 58 tests passed
 - [x] P3 完整測試覆蓋 → 153 tests passed
-  - [x] test_price_action.py (22 tests)
-  - [x] test_chan_theory.py (18 tests)
-  - [x] test_wave_theory.py (22 tests)
-  - [x] test_strategy.py (23 tests)
-  - [x] test_analyzer_integration.py (15 tests)
 
 ---
 
@@ -126,10 +159,10 @@ tests/
 
 | 狀態 | 模組 | 測試數 | 優先度 |
 |------|------|--------|--------|
-| ✅ | price_action.py | 13 | P1 |
-| ✅ | chan_theory.py | 8 | P1 |
-| ✅ | wave_theory.py | 10 | P2 |
-| ✅ | strategy.py | 12 | P2 |
+| ✅ | price_action.py | 22 | P1 |
+| ✅ | chan_theory.py | 18 | P1 |
+| ✅ | wave_theory.py | 22 | P2 |
+| ✅ | strategy.py | 23 | P2 |
 | ✅ | analyzer (端到端) | 15 | P1 |
 
 ### P3.2: 測試覆蓋缺口

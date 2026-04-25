@@ -5,8 +5,25 @@ Data Fetcher Module - 數據獲取模組
 """
 
 import re
+import time
 from typing import Optional, Dict, List
 import pandas as pd
+
+def retry_on_failure(max_retries: int = 3, delay: float = 1.0):
+    """重試裝飾器"""
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_exception = e
+                    if attempt < max_retries - 1:
+                        time.sleep(delay * (attempt + 1))
+            raise last_exception
+        return wrapper
+    return decorator
 
 try:
     import yfinance
@@ -229,28 +246,33 @@ def search_stock_by_name(name: str) -> Optional[List[Dict]]:
         "response": "json"
     }
     
-    try:
-        resp = requests.get(
-            "https://www.twse.com.tw/rwd/zh/company/search/code",
-            params=params,
-            timeout=10
-        )
-        data = resp.json()
+    for attempt in range(3):
+        try:
+            resp = requests.get(
+                "https://www.twse.com.tw/rwd/zh/company/search/code",
+                params=params,
+                timeout=10
+            )
+            data = resp.json()
+            
+            if 'data' not in data or not data['data']:
+                return None
+            
+            results = []
+            for row in data['data']:
+                if len(row) >= 2:
+                    results.append({
+                        'code': row[0],
+                        'name': row[1]
+                    })
+            return results
         
-        if 'data' not in data or not data['data']:
-            return None
-        
-        results = []
-        for row in data['data']:
-            if len(row) >= 2:
-                results.append({
-                    'code': row[0],
-                    'name': row[1]
-                })
-        return results
-    
-    except Exception as e:
-        print(f"Stock search error: {e}")
+        except Exception as e:
+            print(f"Stock search error (attempt {attempt+1}): {e}")
+            if attempt < 2:
+                time.sleep(1 * (attempt + 1))
+            else:
+                return None
     
     return None
 
@@ -264,31 +286,37 @@ def get_stock_code_list() -> Dict[str, str]:
     
     import requests
     
-    try:
-        resp = requests.get(
-            "https://www.twse.com.tw/rwd/zh/company/companyList",
-            params={"response": "json", "firstDate": "", "lastDate": ""},
-            timeout=30
-        )
-        data = resp.json()
+    for attempt in range(3):
+        try:
+            resp = requests.get(
+                "https://www.twse.com.tw/rwd/zh/company/companyList",
+                params={"response": "json", "firstDate": "", "lastDate": ""},
+                timeout=30
+            )
+            data = resp.json()
+            
+            if 'data' not in data or not data['data']:
+                return {}
+            
+            cache = {}
+            for row in data['data']:
+                if len(row) >= 2:
+                    code = row[0]
+                    name = row[1]
+                    cache[code] = name
+                    cache[name] = code
+            
+            STOCK_CODE_CACHE = cache
+            return cache
         
-        if 'data' not in data or not data['data']:
-            return {}
-        
-        cache = {}
-        for row in data['data']:
-            if len(row) >= 2:
-                code = row[0]
-                name = row[1]
-                cache[code] = name
-                cache[name] = code
-        
-        STOCK_CODE_CACHE = cache
-        return cache
-    
-    except Exception as e:
-        print(f"Stock code list error: {e}")
-        return {}
+        except Exception as e:
+            print(f"Stock code list error (attempt {attempt+1}): {e}")
+            if attempt < 2:
+                time.sleep(1 * (attempt + 1))
+            else:
+                return {}
+
+    return {}
 
 
 def resolve_stock_code(input_str: str) -> Optional[str]:
@@ -296,6 +324,7 @@ def resolve_stock_code(input_str: str) -> Optional[str]:
     解析輸入字串，自動識別代碼或名稱並轉換為標準代碼
     支援格式：
     - 2330, 2330.TW (直接返回)
+    - AAPL, MSFT (美股直接返回)
     - 台積電, 聯發科 (名稱搜尋)
     """
     input_str = input_str.strip()
@@ -306,14 +335,18 @@ def resolve_stock_code(input_str: str) -> Optional[str]:
     if re.match(r'^\d{4,6}$', input_str):
         return input_str
     
+    if re.match(r'^[A-Z]{1,5}$', input_str):
+        return input_str.upper()
+    
     code_list = get_stock_code_list()
     
-    if input_str in code_list:
+    if code_list and input_str in code_list:
         return code_list[input_str]
     
-    for code, name in code_list.items():
-        if input_str in name or name in input_str:
-            return code
+    if code_list:
+        for code, name in code_list.items():
+            if input_str in name or name in input_str:
+                return code
     
     for name, code in TWSTOCK_PRESET.items():
         if isinstance(code, str):
@@ -340,9 +373,9 @@ def detect_market(ticker: str) -> str:
     elif re.match(r'^\d{4,6}$', ticker):
         return 'TWSE'
     elif re.match(r'^[A-Z]{1,5}$', ticker):
-        return 'US'
+        return 'NASDAQ'
     else:
-        return 'US'
+        return 'NASDAQ'
 
 
 def fetch_yfinance(ticker: str, period: str = "6mo") -> Optional[pd.DataFrame]:
