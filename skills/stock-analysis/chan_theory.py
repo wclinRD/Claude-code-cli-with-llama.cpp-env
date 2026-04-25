@@ -12,120 +12,65 @@ def identify笔(df: pd.DataFrame, min_bars: int = 4) -> List[Dict]:
     """
     識別纏論筆
     筆：至少 4 根 K 線構成的市場基本運動單位
-    
-    更嚴謹的包含處理邏輯：
-    - 上升筆：後一根 K 線的低點 >= 前一根 K 線的低點
-    - 下降筆：後一根 K 線的高點 <= 前一根 K 線的高點
     """
     if df is None or len(df) < min_bars:
         return []
     
     pens = []
-    i = 0
     
+    i = 0
     while i < len(df) - min_bars:
-        found_pen = False
+        start_idx = i
         
-        for j in range(i + min_bars - 1, len(df)):
-            direction = None
+        found = False
+        for j in range(i + min_bars, len(df)):
+            high = df.iloc[j]['High']
+            low = df.iloc[j]['Low']
             
-            prev_high = df.iloc[i]['High']
-            prev_low = df.iloc[i]['Low']
-            valid = True
+            up = True
+            for k in range(i, j):
+                if df.iloc[k]['Close'] < df.iloc[k]['High'] * 0.99:
+                    continue
+                if df.iloc[k]['Close'] > df.iloc[k]['Low'] * 1.01:
+                    continue
+                up = False
+                break
             
-            for k in range(i, j + 1):
-                curr_high = df.iloc[k]['High']
-                curr_low = df.iloc[k]['Low']
-                
-                if direction is None:
-                    if curr_high > prev_high and curr_low >= prev_low:
-                        direction = 'up'
-                    elif curr_low < prev_low and curr_high <= prev_high:
-                        direction = 'down'
-                    else:
-                        valid = False
-                        break
-                else:
-                    if direction == 'up':
-                        if curr_low < prev_low:
-                            valid = False
-                            break
-                        prev_high = curr_high
-                        prev_low = curr_low
-                    else:
-                        if curr_high > prev_high:
-                            valid = False
-                            break
-                        prev_high = curr_high
-                        prev_low = curr_low
-            
-            if valid and direction:
-                pen_data = {
+            if up:
+                pens.append({
                     'start': str(df.iloc[i]['Date']),
                     'end': str(df.iloc[j]['Date']),
-                    'type': direction,
-                }
-                if direction == 'up':
-                    pen_data['high'] = float(df.iloc[j]['High'])
-                else:
-                    pen_data['low'] = float(df.iloc[j]['Low'])
-                
-                pens.append(pen_data)
-                i = j + 1
-                found_pen = True
+                    'type': 'up',
+                    'high': float(high)
+                })
+                i = j
+                found = True
+                break
+            
+            down = True
+            for k in range(i, j):
+                if df.iloc[k]['Close'] > df.iloc[k]['Low'] * 1.01:
+                    continue
+                if df.iloc[k]['Close'] < df.iloc[k]['High'] * 0.99:
+                    continue
+                down = False
+                break
+            
+            if down:
+                pens.append({
+                    'start': str(df.iloc[i]['Date']),
+                    'end': str(df.iloc[j]['Date']),
+                    'type': 'down',
+                    'low': float(low)
+                })
+                i = j
+                found = True
                 break
         
-        if not found_pen:
+        if not found:
             i += 1
     
     return pens[-10:]
-
-
-def detect_笔破壞(pens: List[Dict], df: pd.DataFrame) -> List[Dict]:
-    """
-    檢測筆破壞
-    筆破壞：原本的筆被後續筆突破
-    
-    上升筆破壞：上升筆的最高點被後續下降筆突破
-    下降筆破壞：下降筆的最低點被後續上升筆突破
-    """
-    if not pens or len(pens) < 2:
-        return []
-    
-    destructions = []
-    
-    for i in range(len(pens) - 1):
-        current_pen = pens[i]
-        next_pen = pens[i + 1]
-        
-        if current_pen['type'] == 'up':
-            current_high = current_pen['high']
-            if next_pen['type'] == 'down':
-                destroyed_high = next_pen.get('low', 0)
-                if destroyed_high < current_high:
-                    destructions.append({
-                        'pen_index': i,
-                        'destroyed_pen': current_pen,
-                        'destroying_pen': next_pen,
-                        'type': 'up_broken',
-                        'break_high': float(current_high),
-                        'break_low': float(destroyed_high)
-                    })
-        else:
-            current_low = current_pen['low']
-            if next_pen['type'] == 'up':
-                destroyed_low = next_pen.get('high', float('inf'))
-                if destroyed_low > current_low:
-                    destructions.append({
-                        'pen_index': i,
-                        'destroyed_pen': current_pen,
-                        'destroying_pen': next_pen,
-                        'type': 'down_broken',
-                        'break_low': float(current_low),
-                        'break_high': float(destroyed_low)
-                    })
-    
-    return destructions
 
 
 def identify线段(df: pd.DataFrame) -> List[Dict]:
@@ -243,158 +188,10 @@ def analyze_chan(df: pd.DataFrame) -> Dict:
     segments = identify线段(df)
     zhongshus = identify中枢(df)
     trend = classify趋势(df)
-    pen_destructions = detect_笔破壞(pens, df)
     
     return {
         'pens': pens,
         'segments': segments,
         'zhongshus': zhongshus,
-        'trend': trend,
-        'pen_destructions': pen_destructions
+        'trend': trend
     }
-
-
-def identify_head_shoulders(df: pd.DataFrame, min_bars: int = 20) -> List[Dict]:
-    """
-    識別頭肩頂/底
-    頭肩頂：中間高點高於兩側高點
-    頭肩底：中間低點低於兩側低點
-    """
-    if df is None or len(df) < min_bars:
-        return []
-    
-    patterns = []
-    
-    for window in range(30, min(60, len(df) // 2), 5):
-        for i in range(len(df) - window):
-            segment = df.iloc[i:i + window]
-            highs = segment['High'].values
-            lows = segment['Low'].values
-            
-            left_high_idx = np.argmax(highs[:len(highs)//3])
-            center_high_idx = np.argmax(highs[len(highs)//3:2*len(highs)//3]) + len(highs)//3
-            right_high_idx = np.argmax(highs[2*len(highs)//3:]) + 2*len(highs)//3
-            
-            left_low_idx = np.argmin(lows[:len(lows)//3])
-            center_low_idx = np.argmin(lows[len(lows)//3:2*len(lows)//3]) + len(lows)//3
-            right_low_idx = np.argmin(lows[2*len(lows)//3:]) + 2*len(lows)//3
-            
-            center_high = highs[center_high_idx]
-            if (highs[left_high_idx] < center_high and 
-                highs[right_high_idx] < center_high and
-                center_high > np.mean(highs)):
-                patterns.append({
-                    'type': 'head_and_shoulders_top',
-                    'left_shoulder': float(highs[left_high_idx]),
-                    'head': float(center_high),
-                    'right_shoulder': float(highs[right_high_idx]),
-                    'start': str(segment.iloc[0]['Date']),
-                    'end': str(segment.iloc[-1]['Date'])
-                })
-            
-            center_low = lows[center_low_idx]
-            if (lows[left_low_idx] > center_low and 
-                lows[right_low_idx] > center_low and
-                center_low < np.mean(lows)):
-                patterns.append({
-                    'type': 'head_and_shoulders_bottom',
-                    'left_shoulder': float(lows[left_low_idx]),
-                    'head': float(center_low),
-                    'right_shoulder': float(lows[right_low_idx]),
-                    'start': str(segment.iloc[0]['Date']),
-                    'end': str(segment.iloc[-1]['Date'])
-                })
-    
-    if patterns:
-        return patterns[:3]
-    return []
-
-
-def identify_flag(df: pd.DataFrame, min_bars: int = 10) -> List[Dict]:
-    """
-    識別旗型/旗竿
-    旗竿：急劇的價格變動
-    旗形：整理區間，通常與趨勢相反
-    """
-    if df is None or len(df) < min_bars:
-        return []
-    
-    flags = []
-    
-    for i in range(min_bars, len(df) - min_bars):
-        pole_start = df.iloc[:i]
-        flag_start = df.iloc[i:]
-        
-        pole_change = (pole_start.iloc[-1]['Close'] - pole_start.iloc[0]['Close']) / pole_start.iloc[0]['Close']
-        
-        if abs(pole_change) > 0.03:
-            flag_range = flag_start['High'].max() - flag_start['Low'].min()
-            flag_pct = flag_range / pole_start.iloc[0]['Close']
-            
-            if flag_pct < 0.02:
-                flags.append({
-                    'type': 'bull_flag' if pole_change > 0 else 'bear_flag',
-                    'pole_change_pct': float(pole_change * 100),
-                    'flag_range_pct': float(flag_pct * 100),
-                    'start': str(pole_start.iloc[0]['Date']),
-                    'pole_end': str(pole_start.iloc[-1]['Date']),
-                    'flag_start': str(flag_start.iloc[0]['Date']),
-                    'flag_end': str(flag_start.iloc[-1]['Date'])
-                })
-    
-    if flags:
-        return flags[:3]
-    return []
-
-
-def identify_wedge(df: pd.DataFrame, min_bars: int = 15) -> List[Dict]:
-    """
-    識別楔形整理
-    楔形：價格在收斂的區間內整理
-    上升楔形：通常預示反轉下跌
-    下降楔形：通常預示反轉上漲
-    """
-    if df is None or len(df) < min_bars:
-        return []
-    
-    wedges = []
-    
-    for window in range(min_bars, min(40, len(df) // 2), 5):
-        for i in range(len(df) - window):
-            segment = df.iloc[i:i + window]
-            
-            highs = segment['High'].values
-            lows = segment['Low'].values
-            
-            high_slope = (highs[-1] - highs[0]) / len(highs)
-            low_slope = (lows[-1] - lows[0]) / len(lows)
-            
-            if high_slope < 0 and low_slope > 0:
-                if abs(high_slope - low_slope) < 0.001:
-                    wedges.append({
-                        'type': 'neutral_wedge',
-                        'high_slope': float(high_slope),
-                        'low_slope': float(low_slope),
-                        'start': str(segment.iloc[0]['Date']),
-                        'end': str(segment.iloc[-1]['Date'])
-                    })
-                elif high_slope > low_slope:
-                    wedges.append({
-                        'type': 'rising_wedge',
-                        'high_slope': float(high_slope),
-                        'low_slope': float(low_slope),
-                        'start': str(segment.iloc[0]['Date']),
-                        'end': str(segment.iloc[-1]['Date'])
-                    })
-                else:
-                    wedges.append({
-                        'type': 'falling_wedge',
-                        'high_slope': float(high_slope),
-                        'low_slope': float(low_slope),
-                        'start': str(segment.iloc[0]['Date']),
-                        'end': str(segment.iloc[-1]['Date'])
-                    })
-    
-    if wedges:
-        return wedges[:3]
-    return []

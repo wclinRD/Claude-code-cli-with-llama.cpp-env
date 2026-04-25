@@ -319,76 +319,6 @@ def detect_w底_m頭(df: pd.DataFrame) -> Dict:
     return result
 
 
-def detect_triangles(df: pd.DataFrame, lookback: int = 30) -> Dict:
-    """偵測三角形整理型態"""
-    if df is None or len(df) < lookback * 2:
-        return {'type': None, 'confidence': 0}
-    
-    recent = df.tail(lookback)
-    highs = recent['High'].values
-    lows = recent['Low'].values
-    
-    high_slope = (highs[-1] - highs[0]) / highs[0]
-    low_slope = (lows[-1] - lows[0]) / lows[0]
-    
-    result = {'type': None, 'confidence': 0, 'details': {}}
-    
-    if high_slope > -0.01 and low_slope > 0.03:
-        result['type'] = '上升三角形'
-        result['confidence'] = 0.7
-        result['details'] = {'resistance': highs.max(), 'support': lows.min()}
-    elif high_slope < -0.03 and low_slope > -0.01:
-        result['type'] = '下降三角形'
-        result['confidence'] = 0.7
-        result['details'] = {'resistance': highs.max(), 'support': lows.min()}
-    elif high_slope < -0.02 and low_slope > 0.02:
-        result['type'] = '收斂三角形'
-        result['confidence'] = 0.65
-        result['details'] = {'apex': (highs[-1] + lows[-1]) / 2}
-    
-    return result
-
-
-def detect_bowl_spoon(df: pd.DataFrame, lookback: int = 30) -> Dict:
-    """偵測碗型/匙型底"""
-    if df is None or len(df) < lookback:
-        return {'type': None, 'confidence': 0}
-    
-    recent = df.tail(lookback)
-    closes = recent['Close'].values
-    lows = recent['Low'].values
-    
-    min_idx = lows.argmin()
-    start_third = lookback // 3
-    end_third = lookback * 2 // 3
-    
-    result = {'type': None, 'confidence': 0, 'details': {}}
-    
-    if min_idx > start_third and min_idx < end_third:
-        left_slope = (closes[min_idx] - closes[0]) / closes[0]
-        right_slope = (closes[-1] - closes[min_idx]) / closes[min_idx]
-        
-        if left_slope < -0.05 and right_slope > 0.05:
-            if right_slope > abs(left_slope) * 1.5:
-                result['type'] = '碗型底'
-                result['confidence'] = 0.7
-                result['details'] = {'bottom': lows[min_idx], 'depth': abs(left_slope) * 100}
-    
-    highs = recent['High'].values
-    max_idx = highs.argmax()
-    if max_idx > start_third and max_idx < end_third:
-        left_slope = (closes[0] - highs[max_idx]) / highs[max_idx]
-        right_slope = (closes[-1] - highs[max_idx]) / highs[max_idx]
-        
-        if left_slope < -0.05 and right_slope > 0.05:
-            if right_slope > abs(left_slope) * 1.5:
-                result['type'] = '倒碗型頂'
-                result['confidence'] = 0.7
-                result['details'] = {'top': highs[max_idx], 'height': abs(left_slope) * 100}
-    
-    return result
-
-
 def detect_patterns(df: pd.DataFrame) -> Dict:
     """型態辨識"""
     if df is None or len(df) < 30:
@@ -417,12 +347,6 @@ def detect_patterns(df: pd.DataFrame) -> Dict:
     if wm_details.get('m頭'):
         patterns_detected.append(('M頭', 0.75))
         pattern_details['m頭'] = wm_details['m頭']
-    
-    # 碗型/匙型底
-    bowl_detect = detect_bowl_spoon(df)
-    if bowl_detect.get('type'):
-        patterns_detected.append((bowl_detect['type'], bowl_detect['confidence']))
-        pattern_details['bowl'] = bowl_detect
     
     # 上升三角形 (Ascending Triangle) - 高點平坦，低點墊高
     recent_highs = highs[-20:]

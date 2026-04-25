@@ -1,533 +1,231 @@
 # Stock-Analysis Skill 修改計劃
 
-## 執行狀態: ✅ Phase 12.1 + 13.1 實作完成 (待API修復)
+## 執行狀態: 🔄 Phase 5 進行中
 
 ---
 
-⚠️ 已知問題:
-- P13.1 法人買賣細節的 TWSE API (BWIBBU_d) 目前對特定日期查詢返回 HTML 而非 JSON
-- 函數架構已實作完成，待 API 端點修復或替代方案確認後可正式使用
+## Phase 5: 錯誤處理強化與除錯 🔄
 
----
+### P5.1: 評估發現的問題
 
-# Phase 12: 數據來源強化 ✅ (已完成)
+| 優先度 | 問題 | 檔案 | 狀態 |
+|--------|------|------|------|
+| 🔴 高 | RSI 除零風險 (line 26) | indicators.py | 🔄 修復中 |
+| 🔴 高 | 裸異常處理 (38處) | data_fetcher.py | 🔄 修復中 |
+| 🟡 中 | 缺少 lxml 依賴 | requirements.txt | 🔄 修復中 |
+| 🟡 中 | pytest.mark.integration 未註冊 | tests/conftest.py | 🔄 修復中 |
+| 🟢 低 | 日誌系統缺失 | 全域 | ⚪ 待處理 |
+| 🟢 低 | 技術指標擴展 | indicators.py | ⚪ 待處理 |
 
-## P12.1: VIX 波動率指數 ✅ 已完成
+### P5.2: 修復進度
 
-### 功能說明
-- 恐慌指數監控，衡量市場恐懼程度
-- VIX > 30: 市場恐懼高位，潛在危機
-- VIX < 15: 市場樂觀，可能處於高點
-
-### 已實作函數
-```python
-# data_fetcher.py
-def fetch_vix_data(period: str = "6mo") -> Optional[pd.DataFrame]:
-    """取得 VIX 波動率指數 (yfinance: ^VIX)"""
-
-def analyze_vix_signals(vix_df: pd.DataFrame) -> Dict:
-    """分析 VIX 訊號"""
-    # return: {
-    #     'current': float,
-    #     'level': 'low'|'normal'|'elevated'|'high',
-    #     'signal': 'fearful'|'neutral'|'complacent',
-    #     'trend': 'rising'|'falling'|'stable',
-    #     'interpretation': str
-    # }
+```
+[x] indicators.py RSI 除零修復
+[x] data_fetcher.py 異常處理強化
+[x] requirements.txt 依賴補全
+[x] pytest 標記註冊
+[x] 測試驗證: 158 passed ✅
 ```
 
-### 預期產出
-- `results['vix']`: VIX 數據與分析
-- `results['vix_signals']`: VIX 訊號解讀
+### P5.3: 修復明細
 
-### 程式碼位置
-- `data_fetcher.py:1582` - `fetch_vix_data()`
-- `data_fetcher.py:1613` - `analyze_vix_signals()`
-- `analyzer.py:13-18` - imports
-- `analyzer.py:100-102` - 整合調用
-
-### 測試結果
-```bash
-VIX signals: {
-    'current': 18.71,
-    'avg_30': 22.22,
-    'level': 'normal',
-    'signal': 'neutral',
-    'trend': 'falling',
-    'interpretation': '市場情緒平穩'
-}
-```
+| 檔案 | 修復內容 |
+|------|----------|
+| indicators.py:26 | RSI 除零: 使用 np.where() 處理 avg_loss=0 |
+| indicators.py:61 | KD 除零: denom.replace(0, np.nan) |
+| indicators.py:230 | Williams%R 除零: 添加分母保護 |
+| indicators.py:246 | CCI 除零: 添加分母保護 |
+| indicators.py:264-277 | DMI 除零: atr 和 di_sum 保護 |
+| data_fetcher.py:434,454,619,733,1323,1371 | 裸異常改為 `except Exception` |
+| requirements.txt | 新增 lxml, pytest |
+| tests/conftest.py | 註冊 pytest.mark.integration |
 
 ---
 
-## P12.2: 選擇權資料 PUT/CALL Ratio ⚠️ 中優先度
+## Phase 0-4: 已完成 ✅
 
-### 功能說明
-- 選擇權Put/Call比率分析
-- PCR > 1.5: 散戶偏多 PUT，潜在底部
-- PCR < 0.5: 散戶偏多 CALL，潜在高點
-- 機構反向指標參考
+### P4.1: 測試驗證結果
 
-### 數據來源
-- 台股: 證交所選擇權統計
-- 美股: Cboe Options Data
-
-### 實作要點
-
-```python
-# data_fetcher.py 新增
-def fetch_options_data(ticker: str) -> Dict:
-    """取得選擇權資料"""
-    # PUT / CALL volume
-    # Open Interest
-    # PCR (Put/Call Ratio)
-    pass
+```
+158 tests collected
+158 passed ✅
 ```
 
----
+### P4.2: 已修正項目
 
-## P12.3: 即時報價 API 整合 🟢 低優先度
+| 狀態 | 項目 | 說明 |
+|------|------|------|
+| ✅ | detect_market() | 美股回傳 "NASDAQ" (而非 "US") |
+| ✅ | resolve_stock_code() | 新增美股代碼直接返回邏輯 |
+| ✅ | API 重試機制 | get_stock_code_list() / search_stock_by_name() 失敗時自動重試 3 次 |
 
-### 功能說明
-- API 整合實現即時報價(非延遲15分鐘)
-- 支援 Twelve Data / Finnhub
+### P4.3: 未來強化 (暂不執行) ⚪
 
-### 實作要點
-
-```python
-# 需現有 .env 配置
-TWELVE_DATA_KEY=xxx
-FINNHUB_KEY=xxx
-
-# config.py 新增
-config = {
-    'api_provider': 'twelvedata' | 'finnhub' | 'yfinance',
-    'realtime': bool
-}
-
-def get_realtime_quote(ticker: str) -> Dict:
-    """即時報價查詢"""
-    pass
-```
-
----
-
-# Phase 13: 法人籌碼分析強化 ✅ (已完成)
-
-## P13.1: 法人買賣細節 ✅ 已完成 (結構完成，待API修復)
-
-### 功能說明
-- 各法人別(外商/投信/自營商/散戶)買賣動向細分
-- 追蹤法人連續買賣行為
-- 法人成本線計算
-
-### 現有數據 (已支援)
-- `fetch_institutional_holdings()`: 取得法人持股
-
-### 缺口分析
-| 資料項 | 現狀 | 需求 |
+| 優先度 | 項目 | 說明 |
 |--------|------|------|
-| 外商買賣張數 | ⚠️ 僅持股% | 需每日買賣細節 |
-| 投信買賣細節 | ⚠️ 無细部 | 需每日進出 |
-| 自營商動向 | ⚠️ 僅總計 | 需細分 |
-
-### 已實作函數
-```python
-# data_fetcher.py
-def fetch_institutional_detail(stock_code: str, days: int = 20) -> Optional[pd.DataFrame]:
-    """取得法人買賣明細 (歷史數據)"""
-    # 返回: DataFrame with date, foreign_buy, foreign_sell, foreign_net, sec_buy, sec_sell, sec_net
-    
-def analyze_institutional_trend(institutional_df: pd.DataFrame) -> Dict:
-    """法人趨勢分析"""
-    # return: {
-    #     'foreign': {'buying': bool, 'streak': int, 'net_5d': float},
-    #     'sec': {'buying': bool, 'streak': int, 'net_5d': float},
-    #     'signal': str,
-    #     'signals': List[str]
-    # }
-```
-
-### 程式碼位置
-- `data_fetcher.py:1752` - `fetch_institutional_detail()`
-- `data_fetcher.py:1818` - `analyze_institutional_trend()`
-- `analyzer.py:101-105` - 整合調用
-
-### ⚠️ 注意事項
-- TWSE API (BWIBBU_d) 目前對特定日期查詢返回 HTML 頁面而非JSON
-- 函數架構已實作完成，待 API 端點修復或替代方案確認後可正式使用
-
-### 預期產出 (API修復後)
-- `results['institutional_detail']`: 法人買賣明細
-- `results['institutional_trend']`: 法人趨勢分析
+| 🟡 中 | 輸入驗證 | 股票代碼格式驗證 |
+| 🟢 低 | 更多技術指標 | STOCHRSI, ADX 等 |
 
 ---
 
-## P13.2: 期貨未平倉 🟢 低優先度
+## Phase 0-3: 已完成 ✅
 
-### 功能說���
-- 期貨未平倉量分析
-- 台指期貨未平倉
-- 選擇權未平倉
+### P0.1: indicators.py 除零問題修復
 
-### 數據來源
-- 期交所每日行情
-- Cboe Futures
+| 狀態 | 項目 | 行號 |
+|------|------|------|
+| ✅ | RSI 計算: avg_loss 為 0 時除零 | 26 |
+| ✅ | KD 計算: high_n - low_n 為 0 | 59 |
+| ✅ | ATR 計算: df['Close'] 為 0 | 211 |
+| ✅ | Williams%R: 分母為 0 | 226 |
+| ✅ | CCI 計算: mean_deviation 為 0 | 242 |
+| ✅ | DMI 計算: atr 為 0, di_sum 為 0 | 260, 269 |
 
----
+> 測試驗證：indicators.py 所有 30 個測試通過
 
-# Phase 14: 分析維度擴充 (規劃中)
+### P0.2: price_action.py 邏輯錯誤修復
 
-## P14.1: 基本面篩選功能 ⚠️ 中優先度
-
-### 功能說明
-- 股息篩選 (殖利率 > X%)
-- 本益比篩選 (PE < X)
-- 產業別篩選
-- 市值篩選
-
-### 實作要點
-
-```python
-# screening.py 新建
-def screen_stocks(criteria: Dict) -> List[Dict]:
-    """
-    股票篩選
-    criteria: {
-        'market': 'TWSE'|'OTC'|'ALL',
-        'min_dividend_yield': 3.0,
-        'max_pe': 20,
-        'min_market_cap': 1000000000,
-        'industry': str
-    }
-    """
-    pass
-
-def screen_by_strategy(strategy: str, params: Dict) -> List[Dict]:
-    """策略篩選"""
-    # 'high_dividend': 高股息
-    # 'value': 價值股
-    # 'growth': 成長股
-    # 'momentum': 動能股
-    pass
-```
-
-### 程式碼位置
-- `screening.py`: 新建模組
-- `analyzer.py`: 新增 `--screen` 選項
+| 狀態 | 項目 | 行號 |
+|------|------|------|
+| ✅ | W底偵測 end_idx 邏輯錯誤 | 222 |
+| ✅ | M頭偵測 end_idx 邏輯錯誤 | 276 |
 
 ---
 
-## P14.2: 自選股清單管理 ⚠️ 中優先度
+## Phase 1: 功能完整性 🟡
 
-### 功能說明
-- 自選股名單建立與管理
-- 群組分類 (存股/成長/投機)
-- 每日監控清單
+### P1.1: 補全葛蘭威爾八大法則
 
-### 實作要點
+| 狀態 | 法則 | 內容 |
+|------|------|------|
+| ✅ | 1 | MA4 從下降轉為上升，股價突破 MA4 |
+| ✅ | 2 | 股價突破 MA4 後回測不跌破 |
+| ✅ | 3 | 股價在 MA4 上方，突然跌破 MA4 又站回 |
+| ✅ | 4 | MA4 上升，股價從下突破 MA4 |
+| ✅ | 5 | MA4 下降，股價從上跌破 MA4 |
+| ✅ | 6 | 股價快速下跌遠離 MA4，出現反彈 |
+| ✅ | 7 | 股價離 MA4 越來越遠，應獲利了結 |
+| ✅ | 8 | MA4 從上升轉為下跌，股價跌破 MA4 |
 
-```python
-# watchlist.py 新建
-WATCHLIST_FILE = "~/.config/stock-analysis/watchlist.json"
+### P1.2: 均線計算彈性化
 
-def load_watchlist() -> Dict:
-    """載入自選股"""
-    pass
-
-def save_watchlist(watchlist: Dict) -> None:
-    """儲存自選股"""
-    pass
-
-def add_to_watchlist(ticker: str, group: str = "default") -> None:
-    """加入自選股"""
-    pass
-
-def analyze_watchlist(group: str = None) -> List[Dict]:
-    """分析自選股"""
-    pass
-```
-
----
-
-## P14.3: 股價異常檢測 🟡 中優先度
-
-### 功能說明
-- 妖股特徵檢測 (瞬間漲跌)
-- 暫停交易檢測
-- 流動性危機檢測
-
-### 實作要點
-
-```python
-# data_fetcher.py 強化
-def detect_volatility_anomaly(df: pd.DataFrame) -> Dict:
-    """檢測波動異常"""
-    return {
-        'is_volatile': bool,
-        'daily_change_max': float,
-        'volume_spike': bool,
-        'warnings': List[str]
-    }
-
-def detect_liquidity_crisis(df: pd.DataFrame) -> Dict:
-    """流動性危機檢測"""
-    pass
-```
-
----
-
-# Phase 15: 模擬交易功能 (規劃中)
-
-## P15.1: 回測系統 🟢 低優先度
-
-### 功能說明
-- 策略回測引擎
-- 訊號產生與損益計算
-- 績效指標
-
-### 實作要點
-
-```python
-# backtest.py 新建
-def backtest_strategy(
-    df: pd.DataFrame,
-    signals: List[Dict],
-    initial_capital: float = 1000000,
-    commission: float = 0.001
-) -> Dict:
-    """
-    策略回測
-    return: {
-        'total_return': float,
-        ' Sharpe': float,
-        'max_drawdown': float,
-        'win_rate': float,
-        'trades': List[Dict]
-    }
-    """
-    pass
-```
-
-### 回測指標
-| 指標 | 說明 |
+| 狀態 | 項目 |
 |------|------|
-| Total Return | 總報酬率 |
-| Sharpe Ratio | 夏普比率 |
-| Max Drawdown | 最大回檔 |
-| Win Rate | 勝率 |
-| Profit Factor | 獲利因子 |
-| Avg Trade | 平均交易天數 |
+| ✅ | 根據資料長度動態計算 MA (不強制要求240天) |
+| ✅ | 資料不足時顯示 NaN 而非直接返回 |
 
 ---
 
-## P15.2: 交易記錄簿 🟢 低優先度
+## Phase 2: 測試框架建立 🟢
 
-### 功能說明
-- 虛擬交易記錄
-- 部位追蹤
-- 損益統計
+### P2.1: 測試目錄結構
 
-### 實作要點
+```
+tests/
+├── __init__.py
+├── conftest.py          # 共用 fixture
+├── test_indicators.py   # 技術指標測試 (30 tests)
+└── test_moving_avg.py   # 均線測試 (28 tests)
+```
 
-```python
-# journal.py 新建
-class TradingJournal:
-    def __init__(self, initial_balance: float):
-        self.balance = initial_balance
-        self.positions = {}
-        self.closed_trades = []
-    
-    def buy(self, ticker: str, qty: int, price: float):
-        """買入記錄"""
-        pass
-    
-    def sell(self, ticker: str, qty: int, price: float):
-        """賣出記錄"""
-        pass
-    
-    def get_performance(self) -> Dict:
-        """績效報告"""
-        pass
+### P2.2: 測試結果
+
+```
+============================= test session starts ==============================
+58 passed in 0.67s
+=============================
 ```
 
 ---
 
-# Phase 16: 視覺化與報告強化 (規劃中)
+## 修改檔案清單
 
-## P16.1: 互動式圖表 🟢 低優先度
-
-### 功能說明
-- HTML/JS 互動圖表
-- 支援 Hover/Zoom
-
-### 實作要點
-
-```python
-# interactive_chart.py 新建
-def generate_interactive_chart(df: pd.DataFrame) -> str:
-    """生成互動式 K 線圖"""
-    # 使用 Plotly.js
-    pass
-
-def generate_dashboard(watchlist: Dict) -> str:
-    """儀表板視圖"""
-    pass
-```
+| 檔案 | 變更 |
+|------|------|
+| `moving_avg.py` | 均線彈性化 + 葛蘭威爾法則 4,5 補全 |
+| `price_action.py` | 修復 end_idx 邏輯錯誤 |
+| `tests/__init__.py` | 新建 |
+| `tests/conftest.py` | 新建共用 fixtures |
+| `tests/test_indicators.py` | 新建 30 個測試 |
+| `tests/test_moving_avg.py` | 新建 28 個測試 |
+| `tests/test_price_action.py` | 新建 22 個測試 |
+| `tests/test_chan_theory.py` | 新建 18 個測試 |
+| `tests/test_wave_theory.py` | 新建 22 個測試 |
+| `tests/test_strategy.py` | 新建 23 個測試 |
+| `tests/test_analyzer_integration.py` | 新建 15 個測試 |
+| `todo.md` | 新建 |
 
 ---
 
-## P16.2: PDF 報告導出 🟢 低優先度
+## 未來強化 (暂不執行) ⚪
 
-### 功能說明
-- 專業 PDF 報告生成
-- 圖文排版
+### 優先強化項目
 
-### 實作要點
+| 優先度 | 項目 | 說明 |
+|--------|------|------|
+| 🔴 高 | API 重試機制 | data_fetcher.py 網路請求失敗時自動重試 |
+| 🔴 高 | 快取機制 | 避免重複 API 呼叫造成浪費 |
+| 🟡 中 | 輸入驗證 | 股票代碼格式驗證 |
+| 🟡 中 | quote.py 函數補全 | get_latest_price 函數 |
+| 🟢 低 | 更多技術指標 | STOCHRSI, ADX 等 |
 
-```python
-# report.py 新建
-def generate_pdf_report(output: Dict, filename: str):
-    """PDF 報告生成"""
-    # 使用 ReportLab 或 FPDF
-    pass
-```
+### 發現的潛在問題
 
----
-
-# Phase 17: 技術債務處理 (規劃中)
-
-## T1: Type Hints 重構 🟡 中優先度
-
-### 現有問題
-- 所有模組缺乏型態標註
-- 難以維護與 Debug
-
-### 重構範圍
-| 檔案 | 函數數 | 優先度 |
-|------|--------|--------|
-| data_fetcher.py | ~50 | 高 |
-| indicators.py | ~30 | 高 |
-| strategy.py | ~40 | 中 |
-| chart_generator.py | ~15 | 中 |
-| price_action.py | ~20 | 中 |
-
-### 實作方式
-```python
-# 範例重構
-def fetch_data(ticker: str, period: str = "6mo") -> Optional[pd.DataFrame]:
-    """取得股票數據"""
-    ...
-```
-
-### 需要添加的類型
-```python
-from typing import Optional, Dict, List, Tuple, Any, Callable
-from typing_extensions import TypedDict
-```
+| 狀態 | 項目 | 說明 |
+|------|------|------|
+| ⚠️ | detect_market() 回傳 "US" | 與預期 "NASDAQ" 不同 |
+| ⚠️ | quote.py 缺少 get_latest_price | 需要從 data_fetcher 導入或補全 |
+| ✅ | 測試覆蓋 | 153 個測試全部通過 |
 
 ---
 
-## T2: 配置參數外部化 🟢 低優先度
-
-### 現有問題
-- 指標週期硬編碼
-- API 網址硬編碼
-- 缺少 config 檔案
-
-### 實作要點
-
-```python
-# config.py 新建
-from dataclasses import dataclass
-from typing import Dict, Any
-
-@dataclass
-class IndicatorConfig:
-    rsi_period: int = 14
-    macd_fast: int = 12
-    macd_slow: int = 26
-    macd_signal: int = 9
-    kd_period: int = 9
-    
-@dataclass  
-class DataConfig:
-    twse_api_url: str = "https://..."
-    otc_api_url: str = "https://..."
-    cache_hours: int = 24
-
-config = {
-    'indicator': IndicatorConfig(),
-    'data': DataConfig()
-}
-```
-
----
-
-# 實作優先順序建議
-
-## 🚀 第一梯隊 (立即實作)
-
-1. **P13.1: 法人買賣細節** - 高實用性
-2. **P12.1: VIX 波動率** - 市場情緒關鍵指標
-3. **T1: Type Hints 重構** - 技術債務改善
-
-## 📦 第二梯隊 (短期目標)
-
-4. **P14.2: 自選股清單** - 常用功能
-5. **P14.3: 股價異常檢測** - 風險控制
-6. **P12.2: 選擇權資料** - 進階籌碼
-
-## 📦 第三梯隊 (中期目標)
-
-7. **P14.1: 基本面篩選** - 功能擴充
-8. **P16.1: 互動式圖表** - 視覺化強化
-9. **P15.1: 回測系統** - 模擬交易
-
-## 📦 第四梯隊 (長期規劃)
-
-10. **P12.3: 即時報價 API** - 需要 API Key
-11. **P13.2: 期貨未平倉** - 數據取得難
-12. **P16.2: PDF 報告** - 低優先
-13. **P15.2: 交易記錄簿** - 依附回測
-
----
-
-# 程式碼結構預期
-
-```
-stock-analysis/
-├── config.py          # 新增: 配置管理
-├── screening.py      # 新增: 股票篩選
-├── watchlist.py      # 新增: 自選股管理
-├── backtest.py       # 新增: 回測引擎
-├── journal.py       # 新增: 交易記錄
-├── interactive.py   # 新增: 互動圖表
-├── report.py        # 新增: PDF報告
-│
-├── analyzer.py      # 強化: 整合新功能
-├── data_fetcher.py # 強化: VIX/選擇權
-├── chart_generator.py # 強化: 新圖表
-└── (其他模組)      # 強化: Type Hints
-```
-
----
-
-# 修改日誌
+## 修改日誌
 
 ### 2026-04-25
-- ✅ Phase 12-17 詳細規劃完成
-- ✅ 新增實作優先順序建議
+- [x] P0.1 indicators.py 除零修復 → 測試通過
+- [x] P0.2 price_action.py 邏輯修復 → 已修正
+- [x] P1.1 葛蘭威爾法則 4,5 → 已補全
+- [x] P1.2 均線彈性化 → 已實作
+- [x] P2 測試框架 → 58 tests passed
+- [x] P3 完整測試覆蓋 → 153 tests passed
 
-### 2026-04-25 (後續)
-- ✅ Phase 12.1 VIX 波動率指數實作完成
-  - `fetch_vix_data()` - 取得 VIX 歷史數據
-  - `analyze_vix_signals()` - VIX 訊號分析
-  - 整合至 `analyzer.py`
-- ✅ Phase 13.1 法人買賣細節實作完成
-  - `fetch_institutional_detail()` - 法人買賣明細
-  - `analyze_institutional_trend()` - 法人趨勢分析
-  - 整合至 `analyzer.py`
-- ✅ 測試驗證: 172 passed
-- ✅ ���增���式碼結構預期
-- ✅ Phase 11 功能實作完成
+---
+
+## Phase 3: 完整測試覆蓋 🔵
+
+### P3.1: 未涵蓋模組測試
+
+| 狀態 | 模組 | 測試數 | 優先度 |
+|------|------|--------|--------|
+| ✅ | price_action.py | 22 | P1 |
+| ✅ | chan_theory.py | 18 | P1 |
+| ✅ | wave_theory.py | 22 | P2 |
+| ✅ | strategy.py | 23 | P2 |
+| ✅ | analyzer (端到端) | 15 | P1 |
+
+### P3.2: 測試覆蓋缺口
+
+| 模組 | 需測試功能 |
+|------|------------|
+| price_action.py | 支撐/阻力、缺口、W底/M頭、趨勢線 |
+| chan_theory.py | 筆識別、線段識別、中樞計算、走勢類型 |
+| wave_theory.py | 峰值偵測、波浪模式、黃金分割 |
+| strategy.py | 技術面多空、訊號整合、趨勢判斷 |
+| analyzer.py | 完整流程整合 |
+
+### P3.3: 測試結果
+
+```
+============================= test session starts ==============================
+153 passed in 2.39s
+=============================
+```
+
+測試檔案:
+- test_indicators.py: 30 tests ✓
+- test_moving_avg.py: 28 tests ✓
+- test_price_action.py: 22 tests ✓ (new)
+- test_chan_theory.py: 18 tests ✓ (new)
+- test_wave_theory.py: 22 tests ✓ (new)
+- test_strategy.py: 23 tests ✓ (new)
+- test_analyzer_integration.py: 15 tests ✓ (new, 5 integration 需要網路)
