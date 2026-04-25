@@ -302,6 +302,8 @@ def calculate_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df = calculate_stochastic(df)
     df = calculate_vwap(df)
     df = calculate_atr_gao(df)
+    df = calculate_bbi(df)
+    df = calculate_pvo(df)
     return df
 
 
@@ -379,6 +381,24 @@ def analyze_advanced_signals(df: pd.DataFrame) -> Dict:
     vwap = latest.get('VWAP')
     if vwap:
         signals.append({'indicator': 'VWAP', 'signal': 'average', 'value': round(vwap, 2), 'action': 'info'})
+    
+    bbi = latest.get('BBI')
+    if bbi:
+        price_above = latest.get('BBIBand', False)
+        if price_above:
+            signals.append({'indicator': 'BBI', 'signal': 'bullish', 'value': f"價格>{bbi:.2f}", 'action': 'buy'})
+        else:
+            signals.append({'indicator': 'BBI', 'signal': 'bearish', 'value': f"價格<{bbi:.2f}", 'action': 'sell'})
+    
+    pvo = latest.get('PVO')
+    pvo_signal = latest.get('PVO_Signal')
+    if pvo:
+        if pvo > 0 and pvo > (pvo_signal or 0):
+            signals.append({'indicator': 'PVO', 'signal': 'bullish', 'value': f"{pvo:.2f}%", 'action': 'buy'})
+        elif pvo < 0 and pvo < (pvo_signal or 0):
+            signals.append({'indicator': 'PVO', 'signal': 'bearish', 'value': f"{pvo:.2f}%", 'action': 'sell'})
+        else:
+            signals.append({'indicator': 'PVO', 'signal': 'neutral', 'value': f"{pvo:.2f}%", 'action': 'hold'})
     
     return {
         'bollinger_bands': {'upper': round(bb[0], 2) if bb[0] else None, 'middle': round(bb[1], 2) if bb[1] else None, 'lower': round(bb[2], 2) if bb[2] else None},
@@ -543,6 +563,46 @@ def calculate_atr_gao(df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
     df['ATR_Gao_Pct'] = (df['ATR_Gao'] / close * 100).fillna(0)
     
     df['TR'] = df['TR'].fillna(0)
+    
+    return df
+
+
+def calculate_bbi(df: pd.DataFrame) -> pd.DataFrame:
+    """計算 BBI 多空指標 (Bull and Bear Index)
+    多空指標 = (MA5 + MA10 + MA20 + MA60) / 4
+    """
+    if df is None or len(df) < 60:
+        return df
+    
+    df = df.copy()
+    
+    df['MA5'] = df['Close'].rolling(window=5).mean()
+    df['MA10'] = df['Close'].rolling(window=10).mean()
+    df['MA20'] = df['Close'].rolling(window=20).mean()
+    df['MA60'] = df['Close'].rolling(window=60).mean()
+    
+    df['BBI'] = (df['MA5'] + df['MA10'] + df['MA20'] + df['MA60']) / 4
+    
+    df['BBIBand'] = df['Close'] > df['BBI']
+    
+    return df
+
+
+def calculate_pvo(df: pd.DataFrame, fast: int = 12, slow: int = 26) -> pd.DataFrame:
+    """計算 PVO 量能震盪指標 (Percentage Volume Oscillator)
+    PVO = (MA12 Volume - MA26 Volume) / MA26 Volume * 100
+    """
+    if df is None or len(df) < slow or 'Volume' not in df.columns:
+        return df
+    
+    df = df.copy()
+    
+    fast_ma = df['Volume'].rolling(window=fast).mean()
+    slow_ma = df['Volume'].rolling(window=slow).mean()
+    
+    df['PVO'] = ((fast_ma - slow_ma) / slow_ma * 100).fillna(0)
+    df['PVO_Signal'] = df['PVO'].ewm(span=9, adjust=False).mean()
+    df['PVO_Histogram'] = df['PVO'] - df['PVO_Signal']
     
     return df
 

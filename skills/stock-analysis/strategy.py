@@ -4,6 +4,7 @@ Strategy Module - 專業投資分析產生器
 """
 
 import pandas as pd
+import numpy as np
 from typing import Dict, List, Tuple, Optional
 from datetime import datetime
 from enum import Enum
@@ -175,6 +176,86 @@ def calculate_kelly_criterion(
         'recommended_fraction': round(recommended_fraction, 4),
         'edge': round(win_rate * win_loss_ratio - (1 - win_rate), 4),
         'verdict': verdict,
+    }
+
+
+def calculate_max_drawdown(df: pd.DataFrame, column: str = 'Close') -> Dict:
+    """計算歷史最大回檔 (Max Drawdown)
+    
+    Args:
+        df: 價格資料 DataFrame
+        column: 價格欄位名稱
+    
+    Returns:
+        最大回檔相關數據
+    """
+    if df is None or len(df) < 2 or column not in df.columns:
+        return {'max_drawdown': 0, 'peak': 0, 'trough': 0, 'duration': 0}
+    
+    prices = df[column].values
+    
+    peak = prices[0]
+    max_dd = 0
+    peak_idx = 0
+    trough_idx = 0
+    
+    for i, price in enumerate(prices):
+        if price > peak:
+            peak = price
+            peak_idx = i
+        
+        dd = (peak - price) / peak
+        if dd > max_dd:
+            max_dd = dd
+            trough_idx = i
+    
+    return {
+        'max_drawdown': round(max_dd * 100, 2),
+        'peak': round(peak, 2),
+        'trough': round(prices[trough_idx], 2),
+        'peak_date': peak_idx,
+        'trough_date': trough_idx,
+        'duration': trough_idx - peak_idx
+    }
+
+
+def calculate_var(
+    df: pd.DataFrame,
+    confidence: float = 0.95,
+    column: str = 'Close',
+    method: str = 'historical'
+) -> Dict:
+    """計算 VaR (Value at Risk) 風險值
+    
+    Args:
+        df: 價格資料 DataFrame
+        confidence: 置信水準 (預設 95%)
+        column: 價格欄位名稱
+        method: 計算方法 (historical, parametric, monte_carlo)
+    
+    Returns:
+        VaR 相關數據
+    """
+    if df is None or len(df) < 30 or column not in df.columns:
+        return {'var': 0, 'confidence': confidence}
+    
+    returns = df[column].pct_change().dropna()
+    
+    if method == 'historical':
+        var = returns.quantile(1 - confidence)
+    elif method == 'parametric':
+        mean = returns.mean()
+        std = returns.std()
+        z_score = 1.645 if confidence == 0.95 else 1.96
+        var = mean - z_score * std
+    else:
+        var = returns.quantile(1 - confidence)
+    
+    return {
+        'var': round(abs(var) * 100, 2),
+        'var_daily': round(abs(var) * df[column].iloc[-1], 2),
+        'confidence': confidence,
+        'method': method
     }
 
 
@@ -933,4 +1014,30 @@ def generate_trading_recommendation(df: pd.DataFrame, results: Dict) -> Dict:
         'target': risk.get('target'),
         'stop_loss': risk.get('stop'),
         'risk_reward': risk.get('risk_reward'),
+    }
+
+
+def generate_risk_report(df: Optional[pd.DataFrame] = None) -> Dict:
+    """生成風險報告
+    
+    Args:
+        df: 價格資料 DataFrame
+    
+    Returns:
+        風險相關數據
+    """
+    risk_report = {'max_drawdown': None, 'var': None}
+    
+    if df is None or len(df) < 30:
+        return risk_report
+    
+    dd = calculate_max_drawdown(df)
+    var_95 = calculate_var(df, confidence=0.95)
+    var_99 = calculate_var(df, confidence=0.99)
+    
+    return {
+        'max_drawdown': dd,
+        'var_95': var_95,
+        'var_99': var_99,
+        'risk_level': 'high' if dd['max_drawdown'] > 20 or var_95['var'] > 5 else 'medium' if dd['max_drawdown'] > 10 or var_95['var'] > 3 else 'low'
     }
