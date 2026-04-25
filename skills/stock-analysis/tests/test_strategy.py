@@ -23,7 +23,17 @@ from strategy import (
     analyze_risk_reward,
     generate_strategy_signal,
     generate_daily_strategy,
-    generate_trading_recommendation
+    generate_trading_recommendation,
+    StopLossType,
+    PositionSide,
+    calculate_stop_loss,
+    calculate_take_profit,
+    calculate_trailing_stop,
+    calculate_risk_management,
+    calculate_kelly_criterion,
+    calculate_position_size_kelly,
+    rank_signals_by_weight,
+    optimize_risk_reward,
 )
 
 
@@ -266,3 +276,117 @@ class TestGenerateStrategySignal:
         }
         result = generate_strategy_signal(results)
         assert '買入' in result['signal']
+
+
+class TestStopLossCalculation:
+    """停損計算測試"""
+    
+    def test_calculate_stop_loss_long_percent(self):
+        """多頭百分比停損"""
+        result = calculate_stop_loss(100, PositionSide.LONG, StopLossType.PERCENT, percent=5)
+        assert result == 95.0
+    
+    def test_calculate_stop_loss_long_atr(self):
+        """多頭 ATR 停損"""
+        result = calculate_stop_loss(100, PositionSide.LONG, StopLossType.ATR, atr=2, atr_multiplier=2)
+        assert result == 96.0
+    
+    def test_calculate_stop_loss_short_percent(self):
+        """空頭百分比停損"""
+        result = calculate_stop_loss(100, PositionSide.SHORT, StopLossType.PERCENT, percent=5)
+        assert result == 105.0
+
+
+class TestTakeProfitCalculation:
+    """停利計算測試"""
+    
+    def test_calculate_take_profit_long(self):
+        """多頭停利"""
+        result = calculate_take_profit(100, PositionSide.LONG, risk_reward_ratio=2.0)
+        assert result == 104.0
+    
+    def test_calculate_take_profit_fixed(self):
+        """固定百分比停利"""
+        result = calculate_take_profit(100, PositionSide.LONG, fixed_percent=10)
+        assert abs(result - 110.0) < 0.01
+
+
+class TestTrailingStop:
+    """移動停損測試"""
+    
+    def test_calculate_trailing_stop_long(self):
+        """多頭移動停損"""
+        result = calculate_trailing_stop(110, 100, 115, PositionSide.LONG, activation_percent=3)
+        assert result >= 97.0
+    
+    def test_calculate_trailing_stop_long_atr(self):
+        """多頭 ATR 移動停損"""
+        result = calculate_trailing_stop(110, 100, 115, PositionSide.LONG, atr=2, atr_multiplier=2)
+        assert result >= 97.0
+
+
+class TestRiskManagement:
+    """完整風控測試"""
+    
+    def test_calculate_risk_management_long(self):
+        """多頭風控"""
+        result = calculate_risk_management(100, 100, PositionSide.LONG)
+        assert 'stop_loss' in result
+        assert 'take_profit' in result
+        assert 'risk_reward_ratio' in result
+        assert result['risk_reward_ratio'] >= 2.0
+
+
+class TestKellyCriterion:
+    """Kelly Criterion 測試"""
+    
+    def test_calculate_kelly_positive_edge(self):
+        """正期望値"""
+        result = calculate_kelly_criterion(win_rate=0.5, avg_win=100, avg_loss=50)
+        assert result['kelly_fraction'] > 0
+        assert 'verdict' in result
+    
+    def test_calculate_kelly_negative_edge(self):
+        """負期望値"""
+        result = calculate_kelly_criterion(win_rate=0.3, avg_win=50, avg_loss=100)
+        assert result['kelly_fraction'] == 0
+        assert '無正期望値' in result['verdict']
+    
+    def test_calculate_position_size_kelly(self):
+        """Kelly 部位計算"""
+        result = calculate_position_size_kelly(1000000, 0.5, 100, 50)
+        assert 'position_value' in result
+        assert 'shares' in result
+        assert 'kelly_info' in result
+
+
+class TestSignalRanking:
+    """訊號排序測試"""
+    
+    def test_rank_signals_by_weight(self):
+        """訊號權重排序"""
+        signals = [
+            {'type': 'buy', 'text': '訊號1'},
+            {'type': 'sell', 'text': '訊號2'},
+            {'type': 'neutral', 'text': '訊號3'},
+        ]
+        weights = {'buy': 10, 'sell': -10, 'neutral': 0}
+        result = rank_signals_by_weight(signals, weights)
+        assert result[0]['type'] == 'buy'
+        assert result[-1]['type'] == 'sell'
+
+
+class TestRiskRewardOptimization:
+    """風險報酬優化測試"""
+    
+    def test_optimize_risk_reward(self):
+        """風險報酬優化"""
+        result = optimize_risk_reward(100, [120, 130], [95, 90])
+        assert 'best' in result
+        assert 'all_options' in result
+        assert len(result['all_options']) > 0
+    
+    def test_optimize_valid_options(self):
+        """有效選項"""
+        result = optimize_risk_reward(100, [120], [90])
+        assert len(result['valid_options']) > 0

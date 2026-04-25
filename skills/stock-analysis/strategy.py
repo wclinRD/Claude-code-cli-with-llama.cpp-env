@@ -4,8 +4,296 @@ Strategy Module - 專業投資分析產生器
 """
 
 import pandas as pd
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 from datetime import datetime
+from enum import Enum
+
+
+class StopLossType(Enum):
+    FIXED = "fixed"
+    ATR = "atr"
+    PERCENT = "percent"
+    TRAILING = "trailing"
+
+
+class PositionSide(Enum):
+    LONG = "long"
+    SHORT = "short"
+
+
+def calculate_stop_loss(
+    entry_price: float,
+    side: PositionSide = PositionSide.LONG,
+    stop_type: StopLossType = StopLossType.PERCENT,
+    atr: Optional[float] = None,
+    atr_multiplier: float = 2.0,
+    percent: float = 5.0,
+) -> float:
+    """計算停損價格"""
+    if side == PositionSide.LONG:
+        if stop_type == StopLossType.ATR and atr:
+            return entry_price - (atr * atr_multiplier)
+        elif stop_type == StopLossType.PERCENT:
+            return entry_price * (1 - percent / 100)
+        else:
+            return entry_price * (1 - percent / 100)
+    else:
+        if stop_type == StopLossType.ATR and atr:
+            return entry_price + (atr * atr_multiplier)
+        elif stop_type == StopLossType.PERCENT:
+            return entry_price * (1 + percent / 100)
+        else:
+            return entry_price * (1 + percent / 100)
+    return entry_price
+
+
+def calculate_take_profit(
+    entry_price: float,
+    side: PositionSide = PositionSide.LONG,
+    risk_reward_ratio: float = 2.0,
+    fixed_percent: Optional[float] = None,
+) -> float:
+    """計算停利價格 (risk_reward_ratio 為 R:R 倍數)"""
+    if fixed_percent:
+        if side == PositionSide.LONG:
+            return entry_price * (1 + fixed_percent / 100)
+        else:
+            return entry_price * (1 - fixed_percent / 100)
+    
+    risk_percent = 2.0
+    risk_amount = entry_price * risk_percent / 100
+    reward = risk_amount * risk_reward_ratio
+    
+    if side == PositionSide.LONG:
+        return entry_price + reward
+    else:
+        return entry_price - reward
+
+
+def calculate_trailing_stop(
+    current_price: float,
+    entry_price: float,
+    highest_price: float,
+    side: PositionSide = PositionSide.LONG,
+    atr: Optional[float] = None,
+    atr_multiplier: float = 2.0,
+    activation_percent: float = 3.0,
+) -> float:
+    """計算移動停損價格"""
+    if side == PositionSide.LONG:
+        if atr:
+            trailing_stop = highest_price - (atr * atr_multiplier)
+        else:
+            trailing_stop = highest_price * (1 - activation_percent / 100)
+        return max(trailing_stop, entry_price * 0.97)
+    else:
+        lowest_price = current_price
+        if atr:
+            trailing_stop = lowest_price + (atr * atr_multiplier)
+        else:
+            trailing_stop = lowest_price * (1 + activation_percent / 100)
+        return min(trailing_stop, entry_price * 1.03)
+
+
+def calculate_risk_management(
+    entry_price: float,
+    current_price: float,
+    side: PositionSide = PositionSide.LONG,
+    risk_percent: float = 2.0,
+    target_reward_ratio: float = 2.0,
+    use_trailing: bool = True,
+    atr: Optional[float] = None,
+) -> Dict:
+    """完整風控計算"""
+    if side == PositionSide.LONG:
+        risk_amount = entry_price - current_price
+        if risk_amount <= 0:
+            risk_amount = entry_price * risk_percent / 100
+        stop_loss = calculate_stop_loss(entry_price, side, percent=risk_percent)
+        take_profit = calculate_take_profit(entry_price, side, risk_reward_ratio=target_reward_ratio)
+    else:
+        risk_amount = current_price - entry_price
+        if risk_amount <= 0:
+            risk_amount = entry_price * risk_percent / 100
+        stop_loss = calculate_stop_loss(entry_price, side, percent=risk_percent)
+        take_profit = calculate_take_profit(entry_price, side, risk_reward_ratio=target_reward_ratio)
+    
+    risk = abs(entry_price - stop_loss)
+    reward = abs(take_profit - entry_price)
+    risk_reward = reward / risk if risk > 0 else 0
+    
+    return {
+        'entry_price': round(entry_price, 2),
+        'stop_loss': round(stop_loss, 2),
+        'take_profit': round(take_profit, 2),
+        'risk_percent': round(risk_percent, 2),
+        'reward_percent': round(target_reward_ratio * risk_percent, 2),
+        'risk_reward_ratio': round(risk_reward, 2),
+        'use_trailing': use_trailing,
+    }
+
+
+def calculate_kelly_criterion(
+    win_rate: float,
+    avg_win: float,
+    avg_loss: float,
+    fraction: float = 0.25,
+) -> Dict:
+    """Kelly Criterion 部位計算"""
+    if avg_loss <= 0 or win_rate <= 0 or win_rate >= 1:
+        return {
+            'kelly_fraction': 0,
+            'optimal_position': 0,
+            'recommended_fraction': fraction,
+            'edge': 0,
+            'verdict': '數據不足',
+        }
+    
+    win_loss_ratio = avg_win / avg_loss
+    kelly = (win_rate * win_loss_ratio - (1 - win_rate)) / win_loss_ratio
+    
+    kelly = max(0, min(kelly, 1))
+    
+    half_kelly = kelly / 2
+    
+    if kelly > 0.25:
+        verdict = "過度積極，建議減半"
+        recommended_fraction = 0.25
+    elif kelly > 0.1:
+        verdict = "建議使用 Half-Kelly"
+        recommended_fraction = half_kelly
+    elif kelly > 0:
+        verdict = "保守參與"
+        recommended_fraction = kelly
+    else:
+        verdict = "無正期望値"
+        recommended_fraction = 0
+    
+    return {
+        'kelly_fraction': round(kelly, 4),
+        'optimal_position': round(kelly * 100, 2),
+        'recommended_fraction': round(recommended_fraction, 4),
+        'edge': round(win_rate * win_loss_ratio - (1 - win_rate), 4),
+        'verdict': verdict,
+    }
+
+
+def calculate_position_size_kelly(
+    portfolio_value: float,
+    win_rate: float,
+    avg_win: float,
+    avg_loss: float,
+    max_risk_per_trade: float = 0.02,
+) -> Dict:
+    """使用 Kelly Criterion 計算部位大小"""
+    kelly_result = calculate_kelly_criterion(win_rate, avg_win, avg_loss)
+    
+    fraction = min(kelly_result['recommended_fraction'], max_risk_per_trade)
+    
+    position_value = portfolio_value * fraction
+    
+    risk_amount = portfolio_value * max_risk_per_trade
+    
+    shares = int(position_value / avg_win) if avg_win > 0 else 0
+    
+    return {
+        'position_value': int(position_value),
+        'position_percent': round(fraction * 100, 2),
+        'shares': shares,
+        'risk_amount': int(risk_amount),
+        'kelly_info': kelly_result,
+    }
+
+
+def calculate_volatility_adjusted_position(
+    portfolio_value: float,
+    atr: float,
+    current_price: float,
+    target_risk_percent: float = 2.0,
+) -> Dict:
+    """波動率調整部位計算"""
+    atr_percent = (atr / current_price) * 100
+    
+    if atr_percent <= 0:
+        return {
+            'position_percent': target_risk_percent,
+            'position_value': int(portfolio_value * target_risk_percent / 100),
+            'shares': 0,
+        }
+    
+    risk_adjusted_percent = min(target_risk_percent / (atr_percent / target_risk_percent) * 2, 20)
+    
+    position_value = portfolio_value * risk_adjusted_percent / 100
+    shares = int(position_value / current_price)
+    
+    return {
+        'position_percent': round(risk_adjusted_percent, 2),
+        'position_value': int(position_value),
+        'shares': shares,
+        'atr_percent': round(atr_percent, 2),
+    }
+
+
+def rank_signals_by_weight(signals: List[Dict], weights: Dict) -> List[Dict]:
+    """多訊號權重排序"""
+    scored = []
+    
+    for signal in signals:
+        signal_type = signal.get('type', 'neutral')
+        weight = weights.get(signal_type, 0)
+        
+        if signal_type == 'buy':
+            weight += 10
+        elif signal_type == 'sell':
+            weight -= 10
+        
+        priority = signal.get('priority', 0)
+        weight += priority
+        
+        scored.append({**signal, 'weight': weight})
+    
+    scored.sort(key=lambda x: x['weight'], reverse=True)
+    
+    return scored
+
+
+def optimize_risk_reward(
+    entry: float,
+    targets: List[float],
+    stops: List[float],
+) -> Dict:
+    """風險報酬優化"""
+    results = []
+    
+    for target in targets:
+        for stop in stops:
+            risk = abs(entry - stop)
+            reward = abs(target - entry)
+            
+            if risk <= 0:
+                continue
+            
+            rr_ratio = reward / risk
+            
+            results.append({
+                'target': target,
+                'stop': stop,
+                'risk': round(risk, 2),
+                'reward': round(reward, 2),
+                'rr_ratio': round(rr_ratio, 2),
+            })
+    
+    results.sort(key=lambda x: x['rr_ratio'], reverse=True)
+    
+    best = results[0] if results else {}
+    
+    valid = [r for r in results if r['rr_ratio'] >= 2.0]
+    
+    return {
+        'best': best,
+        'all_options': results,
+        'valid_options': valid,
+    }
 
 
 def analyze_technical_sentiment(results: Dict) -> Dict:
