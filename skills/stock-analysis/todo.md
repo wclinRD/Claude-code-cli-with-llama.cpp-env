@@ -1,21 +1,68 @@
 # Stock-Analysis Skill 修改計劃
 
-## 執行狀態: 🔄 Phase 5 進行中
+## 執行狀態: ✅ Phase 7 完成 (技術指標擴充)
 
 ---
 
-## Phase 5: 錯誤處理強化與除錯 🔄
+## Phase 7: 技術指標擴充 ✅ (已完成)
 
-### P5.1: 評估發現的問題
+### P7.1: 已完成 ✅
+
+| 優先度 | 項目 | 說明 |
+|--------|------|------|
+| ✅ | MFI | Money Flow Index - 資金流量 |
+| ✅ | Stochastic | 完整版隨機指標 (K, D, SD) |
+| ✅ | VWAP | Volume Weighted Average Price |
+| ✅ | ATR-Gao | 改進版 ATR |
+| ✅ | K 線圖 | generate_candlestick_svg() |
+| ✅ | 指標子圖 | generate_indicator_panel_svg() |
+
+### P7.2: 測試驗證
+
+```
+58 tests passed ✅
+新增指標全部通過驗證
+```
+
+---
+
+## Phase 6: 數據穩定性強化 🟡
+
+### P6.1: 已完成 ✅
+
+| 優先度 | 項目 | 說明 |
+|--------|------|------|
+| ✅ | validate_dataframe() | DataFrame 驗證函數 |
+| ✅ | validate_price() | 價格合理性驗證 |
+| ✅ | load_from_cache() | 快取載入 |
+| ✅ | save_to_cache() | 快取保存 |
+| ✅ | rate_limit() | 速率限制裝飾器 |
+| ✅ | 增強 retry_on_failure() | 加入 backoff 參數 |
+
+### P6.2: 新增函數
+
+```
+data_fetcher.py 新增:
+- validate_dataframe(df, required_columns)
+- validate_price(price, symbol)
+- get_cache_path(ticker, data_type)
+- load_from_cache(ticker, data_type, max_age_hours)
+- save_to_cache(df, ticker, data_type)
+- clear_cache(ticker)
+- rate_limit(host) 裝飾器工廠
+- 增強 retry_on_failure(backoff)
+```
+
+---
+
+### P5.1: 評估發現的問題 (已修復 ✅)
 
 | 優先度 | 問題 | 檔案 | 狀態 |
 |--------|------|------|------|
-| 🔴 高 | RSI 除零風險 (line 26) | indicators.py | 🔄 修復中 |
-| 🔴 高 | 裸異常處理 (38處) | data_fetcher.py | 🔄 修復中 |
-| 🟡 中 | 缺少 lxml 依賴 | requirements.txt | 🔄 修復中 |
-| 🟡 中 | pytest.mark.integration 未註冊 | tests/conftest.py | 🔄 修復中 |
-| 🟢 低 | 日誌系統缺失 | 全域 | ⚪ 待處理 |
-| 🟢 低 | 技術指標擴展 | indicators.py | ⚪ 待處理 |
+| ✅ | RSI 除零風險 (line 26) | indicators.py | ✅ 已修復 |
+| ✅ | 裸異常處理 (38處) | data_fetcher.py | ✅ 已修復 |
+| ✅ | 缺少 lxml 依賴 | requirements.txt | ✅ 已修復 |
+| ✅ | pytest.mark.integration 未註冊 | tests/conftest.py | ✅ 已修復 |
 
 ### P5.2: 修復進度
 
@@ -179,15 +226,140 @@ tests/
 
 ---
 
-## 修改日誌
+## Phase 6: 數據穩定性強化 🔴
 
-### 2026-04-25
-- [x] P0.1 indicators.py 除零修復 → 測試通過
-- [x] P0.2 price_action.py 邏輯修復 → 已修正
-- [x] P1.1 葛蘭威爾法則 4,5 → 已補全
-- [x] P1.2 均線彈性化 → 已實作
-- [x] P2 測試框架 → 58 tests passed
-- [x] P3 完整測試覆蓋 → 153 tests passed
+### P6.1: 待項目
+
+| 優先度 | 項目 | 說明 |
+|--------|------|------|
+| 🔴 高 | 全域錯誤處理裝飾器 | `@retry_api` 裝飾器处理 API 請求失敗 |
+| 🔴 高 | 數據驗證 | null check、範圍合理性驗證 |
+| 🟡 中 | Rate limit 處理 | yfinance 15min/req 限制 |
+| 🟡 中 | 離線緩存 | SQLite/File cache |
+
+---
+
+## Phase 7: 技術指標擴充 🟡
+
+### P7.1: 待項目
+
+| 優先度 | 項目 | 說明 |
+|--------|------|------|
+| 🔴 高 | MFI | Money Flow Index - 資金流量 |
+| 🔴 高 | ADX | Average Directional Index - 趨勢強度 |
+| 🔴 高 | Stochastic | 隨機指標 |
+| 🟡 中 | CCI | Commodity Channel Index |
+| 🟡 中 | VWAP | Volume Weighted Average Price |
+| 🟢 低 | 多週期分析 | 日/週/月 RSI 對比 |
+| 🟢 低 | 背離偵測 | 價格 vs 指標背離 |
+
+### P7.2: 需新增函數
+
+```
+indicators.py 新增:
+- calculate_mfi(df, period=14)
+- calculate_adx(df, period=14)
+- calculate_stochastic(df, k=14, d=3)
+- calculate_vwap(df)
+- detect_divergence_advanced(df, indicator)
+```
+
+---
+
+## Phase 8: 纏論/型態強化 🟡
+
+### P8.1: 待項目
+
+| 優先度 | 項目 | 說明 |
+|--------|------|------|
+| 🔴 高 | 筆識別算法優化 | 更嚴謹的包含處理 |
+| 🔴 高 | 筆破壞判斷 | 筆被後續筆破壞的判斷 |
+| 🟡 中 | 頭肩頂/底識別 | Head and Shoulders |
+| 🟡 中 | 旗型/旗竿識別 | Flag/Pennant |
+| 🟢 低 | 楔形整理 | Wedge |
+
+### P8.2: 需優化函數
+
+```
+chan_theory.py:
+- identify笔() - 添加包含處理
+- detect_笔破壞() - 新增
+- identify_线段() - 完善生成規則
+
+price_action.py:
+- detect_head_shoulders()
+- detect_flag()
+- detect_wedge()
+```
+
+---
+
+## Phase 9: 交易策略量化 🟡
+
+### P9.1: 待項目
+
+| 優先度 | 項目 | 說明 |
+|--------|------|------|
+| 🔴 高 | 完整風控模組 | 停損/停利/移動停損 |
+| 🔴 高 | 部位計算 | Kelly Criterion |
+| 🟡 中 | 風險報酬優化 | 多訊號權重排序 |
+| 🟢 低 | 回測框架 | in-sample/out-of-sample |
+
+### P9.2: 需新增函數
+
+```
+strategy.py 新增:
+- calculate_position_size(capital, risk_pct, entry, stop_loss)
+- calculate_kelly_criterion(win_rate, avg_win, avg_loss)
+- apply_trailing_stop(entry, current, trail_pct)
+- rank_signals(signals[])
+- backtest_signals(df, signals)
+```
+
+---
+
+## Phase 10: 圖表輸出強化 🟢
+
+### P10.1: 待項目
+
+| 優先度 | 項目 | 說明 |
+|--------|------|------|
+| 🔴 高 | K 線圖輸出 | SVG/Canvas 繪製 |
+| 🟡 中 | 均線疊加 | MA5/10/20/60 |
+| 🟡 中 | 技術指標子圖 | 獨立區域繪製指標 |
+| 🟢 低 | 互動式 HTML | Plotly 圖表 |
+
+### P10.2: 需新增函數
+
+```
+chart_generator.py 新增:
+- generate_candlestick_svg(df)
+- generate_ma_overlay(df, mas)
+- generate_indicator_panel(df, indicator)
+- generate_plotly_chart(df)
+```
+
+---
+
+## 技術債務 ⚪
+
+| 優先度 | 項目 |
+|--------|------|
+| 🟡 中 | 缺乏型態標註 (type hints) |
+| 🟢 低 | 模組耦合過高 |
+| 🟢 低 | 硬編碼參數過多 |
+
+---
+
+## 新增測試覆蓋目標
+
+| 優先度 | 模組 | 新增測試 |
+|--------|------|----------|
+| 🔴 高 | data_fetcher (網路) | 5 |
+| 🟡 中 | indicators (MFI/ADX等) | 15 |
+| 🟡 中 | chan_theory (筆破壞) | 10 |
+| 🟢 低 | strategy (風控) | 8 |
+| 🟢 低 | chart_generator | 5 |
 
 ---
 

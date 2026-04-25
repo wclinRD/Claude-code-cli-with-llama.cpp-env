@@ -298,6 +298,10 @@ def calculate_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df = calculate_williams_r(df)
     df = calculate_cci(df)
     df = calculate_dmi(df)
+    df = calculate_mfi(df)
+    df = calculate_stochastic(df)
+    df = calculate_vwap(df)
+    df = calculate_atr_gao(df)
     return df
 
 
@@ -353,6 +357,29 @@ def analyze_advanced_signals(df: pd.DataFrame) -> Dict:
         else:
             signals.append({'indicator': 'DMI', 'signal': 'neutral', 'value': f"ADX:{adx:.1f}", 'action': 'hold'})
     
+    mfi = latest.get('MFI')
+    if mfi:
+        if mfi > 80:
+            signals.append({'indicator': 'MFI', 'signal': 'overbought', 'value': round(mfi, 2), 'action': 'sell'})
+        elif mfi < 20:
+            signals.append({'indicator': 'MFI', 'signal': 'oversold', 'value': round(mfi, 2), 'action': 'buy'})
+        else:
+            signals.append({'indicator': 'MFI', 'signal': 'neutral', 'value': round(mfi, 2), 'action': 'hold'})
+    
+    stoch_k = latest.get('Stoch_K')
+    stoch_d = latest.get('Stoch_D')
+    if stoch_k and stoch_d:
+        if stoch_k > 80 and stoch_d > 80:
+            signals.append({'indicator': 'Stochastic', 'signal': 'overbought', 'value': f"K:{stoch_k:.1f}, D:{stoch_d:.1f}", 'action': 'sell'})
+        elif stoch_k < 20 and stoch_d < 20:
+            signals.append({'indicator': 'Stochastic', 'signal': 'oversold', 'value': f"K:{stoch_k:.1f}, D:{stoch_d:.1f}", 'action': 'buy'})
+        else:
+            signals.append({'indicator': 'Stochastic', 'signal': 'neutral', 'value': f"K:{stoch_k:.1f}, D:{stoch_d:.1f}", 'action': 'hold'})
+    
+    vwap = latest.get('VWAP')
+    if vwap:
+        signals.append({'indicator': 'VWAP', 'signal': 'average', 'value': round(vwap, 2), 'action': 'info'})
+    
     return {
         'bollinger_bands': {'upper': round(bb[0], 2) if bb[0] else None, 'middle': round(bb[1], 2) if bb[1] else None, 'lower': round(bb[2], 2) if bb[2] else None},
         'atr': round(atr, 2) if atr else None,
@@ -360,5 +387,171 @@ def analyze_advanced_signals(df: pd.DataFrame) -> Dict:
         'williams_r': round(wr, 2) if wr else None,
         'cci': round(cci, 2) if cci else None,
         'dmi': {'plus_di': round(plus_di, 2) if plus_di else None, 'minus_di': round(minus_di, 2) if minus_di else None, 'adx': round(adx, 2) if adx else None},
+        'mfi': round(mfi, 2) if mfi else None,
+        'stochastic': {'k': round(stoch_k, 2) if stoch_k else None, 'd': round(stoch_d, 2) if stoch_d else None},
+        'vwap': round(vwap, 2) if vwap else None,
         'signals': signals
     }
+
+
+def calculate_mfi(df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
+    """
+    計算 MFI (Money Flow Index) - 資金流量指數
+    
+    Args:
+        df: 包含 High, Low, Close, Volume 的 DataFrame
+        period: 計算週期
+    
+    Returns:
+        加上 MFI 欄位的 DataFrame
+    """
+    if df is None or len(df) < period:
+        return df
+    
+    df = df.copy()
+    
+    typical_price = (df['High'] + df['Low'] + df['Close']) / 3
+    
+    money_flow = typical_price * df['Volume']
+    
+    positive_flow = [0]
+    negative_flow = [0]
+    
+    for i in range(1, len(typical_price)):
+        if typical_price.iloc[i] > typical_price.iloc[i-1]:
+            positive_flow.append(money_flow.iloc[i])
+            negative_flow.append(0)
+        elif typical_price.iloc[i] < typical_price.iloc[i-1]:
+            positive_flow.append(0)
+            negative_flow.append(money_flow.iloc[i])
+        else:
+            positive_flow.append(positive_flow[-1])
+            negative_flow.append(negative_flow[-1])
+    
+    df['MFI_Positive'] = pd.Series(positive_flow, index=df.index)
+    df['MFI_Negative'] = pd.Series(negative_flow, index=df.index)
+    
+    period_flow = rolling_sum(df['MFI_Positive'], period)
+    period_negative = rolling_sum(df['MFI_Negative'], period)
+    
+    with np.errstate(divide='ignore', invalid='ignore'):
+        mfi_ratio = period_flow / period_negative
+        mfi_ratio = mfi_ratio.replace([np.inf, -np.inf], np.nan)
+    
+    df['MFI'] = 100 - (100 / (1 + mfi_ratio))
+    df['MFI'] = df['MFI'].fillna(50)
+    
+    df = df.drop(columns=['MFI_Positive', 'MFI_Negative'])
+    
+    return df
+
+
+def calculate_stochastic(df: pd.DataFrame, k_period: int = 14, d_period: int = 3, smooth: int = 3) -> pd.DataFrame:
+    """
+    計算 Stochastic 隨機指標 (完整版)
+    
+    Args:
+        df: DataFrame
+        k_period: %K 週期
+        d_period: %D 週期
+        smooth: 平滑週期
+    
+    Returns:
+        加上 %K, %D, %SD 欄位的 DataFrame
+    """
+    if df is None or len(df) < k_period:
+        return df
+    
+    df = df.copy()
+    
+    low_k = df['Low'].rolling(window=k_period).min()
+    high_k = df['High'].rolling(window=k_period).max()
+    
+    denom = high_k - low_k
+    denom = denom.replace(0, np.nan)
+    
+    df['Stoch_K'] = ((df['Close'] - low_k) / denom * 100).fillna(50)
+    
+    df['Stoch_K_Smooth'] = df['Stoch_K'].rolling(window=smooth).mean()
+    df['Stoch_D'] = df['Stoch_K_Smooth'].rolling(window=d_period).mean()
+    df['Stoch_SD'] = df['Stoch_D']
+    
+    df = df.drop(columns=['Stoch_K_Smooth'])
+    
+    return df
+
+
+def calculate_vwap(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    計算 VWAP (Volume Weighted Average Price)
+    
+    Args:
+        df: 包含 High, Low, Close, Volume 的 DataFrame
+    
+    Returns:
+        加上 VWAP 欄位的 DataFrame
+    """
+    if df is None or len(df) < 1:
+        return df
+    
+    df = df.copy()
+    
+    typical_price = (df['High'] + df['Low'] + df['Close']) / 3
+    
+    df['TP_Volume'] = typical_price * df['Volume']
+    
+    df['VWAP'] = df['TP_Volume'].cumsum() / df['Volume'].cumsum()
+    df['VWAP'] = df['VWAP'].fillna(df['Close'])
+    
+    df = df.drop(columns=['TP_Volume'])
+    
+    return df
+
+
+def calculate_atr_gao(df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
+    """
+    計算 ATR (Average True Range) - Gao 改進版
+    
+    Args:
+        df: 包含 High, Low, Close 的 DataFrame
+        period: 計算週期
+    
+    Returns:
+        加上 ATR 欄位的 DataFrame
+    """
+    if df is None or len(df) < period:
+        return df
+    
+    df = df.copy()
+    
+    high = df['High']
+    low = df['Low']
+    close = df['Close']
+    prev_close = close.shift(1)
+    
+    tr1 = high - low
+    tr2 = abs(high - prev_close)
+    tr3 = abs(low - prev_close)
+    
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    
+    df['TR'] = tr
+    
+    df['ATR_Gao'] = tr.ewm(span=period, adjust=False).mean()
+    
+    prev_atr = df['ATR_Gao'].shift(1)
+    df['ATR_Gao_Pct'] = (df['ATR_Gao'] / close * 100).fillna(0)
+    
+    df['TR'] = df['TR'].fillna(0)
+    
+    return df
+
+
+def rolling_sum(series: pd.Series, window: int) -> pd.Series:
+    """滾動總和"""
+    return series.rolling(window=window, min_periods=window).sum()
+
+
+def rolling_mean(series: pd.Series, window: int) -> pd.Series:
+    """滾動平均"""
+    return series.rolling(window=window, min_periods=window).mean()

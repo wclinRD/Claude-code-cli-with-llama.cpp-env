@@ -6,21 +6,223 @@ Data Fetcher Module - 數據獲取模組
 
 import re
 import time
-from typing import Optional, Dict, List
+import hashlib
+import json
+import os
+from functools import wraps
+from typing import Optional, Dict, List, Callable, Any
+from datetime import datetime, timedelta
 import pandas as pd
 
-def retry_on_failure(max_retries: int = 3, delay: float = 1.0):
-    """重試裝飾器"""
-    def decorator(func):
-        def wrapper(*args, **kwargs):
+# Cache directory
+CACHE_DIR = os.path.expanduser("~/.cache/stock-analysis")
+os.makedirs(CACHE_DIR, exist_ok=True)
+
+
+def validate_dataframe(df: Optional[pd.DataFrame], required_columns: List[str] = None) -> bool:
+    """
+    驗證 DataFrame 是否有效
+    
+    Args:
+        df: 要驗證的 DataFrame
+        required_columns: 必要的欄位名稱
+    
+    Returns:
+        bool: 是否通過驗證
+    """
+    if df is None or df.empty:
+        return False
+    
+    if required_columns:
+        for col in required_columns:
+            if col not in df.columns:
+                return False
+    
+    # Check for critical null values
+    if 'Close' in df.columns:
+        null_close = df['Close'].isna().sum()
+        if null_close > len(df) * 0.5:  # Allow up to 50% null
+            return False
+    
+    # Check for reasonable price range
+    if 'Close' in df.columns and len(df) > 0:
+        closes = df['Close'].dropna()
+        if len(closes) > 0:
+            if (closes <= 0).sum() > 0:
+                return False
+            if closes.max() > closes.min() * 100:  # Unrealistic range
+                return False
+    
+    return True
+
+
+def validate_price(price: float, symbol: str = "") -> bool:
+    """
+    驗證價格是否合理
+    
+    Args:
+        price: 價格值
+        symbol: 股票代碼 (用於特殊檢查)
+    
+    Returns:
+        bool: 是否合理
+    """
+    if price is None:
+        return False
+    
+    if price <= 0:
+        return False
+    
+    if price > 1000000:  # Unrealistic for most stocks
+        return False
+    
+    return True
+
+
+def get_cache_path(ticker: str, data_type: str = "daily") -> str:
+    """取得快取檔案路徑"""
+    ticker_hash = hashlib.md5(ticker.encode()).hexdigest()[:8]
+    return os.path.join(CACHE_DIR, f"{data_type}_{ticker_hash}.csv")
+
+
+def load_from_cache(ticker: str, data_type: str = "daily", max_age_hours: int = 24) -> Optional[pd.DataFrame]:
+    """
+    從快取載入數據
+    
+    Args:
+        ticker: 股票代碼
+        data_type: 數據類型 (daily, quote, info)
+        max_age_hours: 最大快取時間（小時）
+    
+    Returns:
+        DataFrame 或 None
+    """
+    cache_path = get_cache_path(ticker, data_type)
+    
+    if not os.path.exists(cache_path):
+        return None
+    
+    try:
+        mtime = os.path.getmtime(cache_path)
+        age_hours = (time.time() - mtime) / 3600
+        
+        if age_hours > max_age_hours:
+            return None
+        
+        df = pd.read_csv(cache_path)
+        if 'Date' in df.columns:
+            df['Date'] = pd.to_datetime(df['Date'])
+        return df
+    except Exception:
+        return None
+
+
+def save_to_cache(df: pd.DataFrame, ticker: str, data_type: str = "daily") -> bool:
+    """
+    保存數據到快取
+    
+    Args:
+        df: 要快取的 DataFrame
+        ticker: 股票代碼
+        data_type: 數據類型
+    
+    Returns:
+        bool: 是否成功
+    """
+    if df is None or df.empty:
+        return False
+    
+    try:
+        cache_path = get_cache_path(ticker, data_type)
+        df.to_csv(cache_path, index=False)
+        return True
+    except Exception:
+        return False
+
+
+def clear_cache(ticker: str = None) -> int:
+    """
+    清除快取
+    
+    Args:
+        ticker: 股票代碼 (None 為清除所有)
+    
+    Returns:
+        int: 清除的檔案數
+    """
+    count = 0
+    
+    if ticker:
+        for data_type in ["daily", "quote", "info"]:
+            cache_path = get_cache_path(ticker, data_type)
+            if os.path.exists(cache_path):
+                os.remove(cache_path)
+                count += 1
+    else:
+        for f in os.listdir(CACHE_DIR):
+            if f.endswith(".csv"):
+                os.remove(os.path.join(CACHE_DIR, f))
+                count += 1
+    
+    return count
+
+
+# Rate limiting
+_last_request_time = {}
+MIN_REQUEST_INTERVAL = 0.5  # seconds between requests to same host
+
+
+def rate_limit(host: str = "default") -> None:
+    """
+    速率限制裝飾器工廠
+    
+    Args:
+        host: 主機識別碼
+    
+    Example:
+        @rate_limit("twse")
+        def my_api_call():
+            ...
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> Any:
+            now = time.time()
+            last_time = _last_request_time.get(host, 0)
+            
+            elapsed = now - last_time
+            if elapsed < MIN_REQUEST_INTERVAL:
+                time.sleep(MIN_REQUEST_INTERVAL - elapsed)
+            
+            _last_request_time[host] = time.time()
+            return func(*args, **kwargs)
+        
+        return wrapper
+    return decorator
+
+
+def retry_on_failure(max_retries: int = 3, delay: float = 1.0, backoff: float = 2.0):
+    """重試裝飾器
+    
+    Args:
+        max_retries: 最大重試次數
+        delay: 初始延遲秒數
+        backoff: 延遲倍率
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> Any:
             last_exception = None
+            
             for attempt in range(max_retries):
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:
                     last_exception = e
                     if attempt < max_retries - 1:
-                        time.sleep(delay * (attempt + 1))
+                        wait_time = delay * (backoff ** attempt)
+                        time.sleep(wait_time)
+            
             raise last_exception
         return wrapper
     return decorator

@@ -202,5 +202,176 @@ def generate_comparison_chart(results: Dict) -> str:
         if 'time_estimate' in wf:
             te = wf['time_estimate']
             lines.append(f"- 時間預測: 短期 {te.get('short', 'N/A')}, 中期 {te.get('medium', 'N/A')}")
+
+
+def generate_candlestick_svg(df: pd.DataFrame, width: int = 800, height: int = 400, show_ma: List[str] = None) -> str:
+    """
+    生成 K 線圖 SVG
+    
+    Args:
+        df: 包含 Open, High, Low, Close 的 DataFrame
+        width: 圖寬
+        height: 圖高
+        show_ma: 要顯示的均線列表，如 ['MA5', 'MA20']
+    
+    Returns:
+        SVG 字符串
+    """
+    if df is None or df.empty or len(df) < 10:
+        return ""
+    
+    recent = df.tail(60).copy()
+    
+    if 'MA5' not in recent.columns and 'MA20' not in recent.columns:
+        from moving_avg import calculate_mas
+        recent = calculate_mas(recent)
+    
+    opens = recent['Open'].values
+    highs = recent['High'].values
+    lows = recent['Low'].values
+    closes = recent['Close'].values
+    
+    price_min = min(lows)
+    price_max = max(highs)
+    price_range = price_max - price_min
+    
+    if price_range == 0:
+        price_range = 1
+    
+    padding = 50
+    chart_width = width - padding * 2
+    chart_height = height - padding * 2
+    candle_width = max(2, chart_width / len(recent) * 0.7)
+    candle_gap = chart_width / len(recent)
+    
+    def y_to_pix(price):
+        return padding + chart_height - ((price - price_min) / price_range * chart_height)
+    
+    def x_to_pix(i):
+        return padding + i * candle_gap + candle_gap / 2
+    
+    candle_paths = []
+    ma_paths = {}
+    
+    for i in range(len(recent)):
+        o = opens[i]
+        h = highs[i]
+        l = lows[i]
+        c = closes[i]
+        
+        is_bullish = c >= o
+        
+        color = "#00d4ff" if is_bullish else "#ff4757"
+        
+        high_y = y_to_pix(h)
+        low_y = y_to_pix(l)
+        open_y = y_to_pix(o)
+        close_y = y_to_pix(c)
+        
+        x = x_to_pix(i)
+        
+        wick = f'<line x1="{x}" y1="{high_y}" x2="{x}" y2="{low_y}" stroke="{color}" stroke-width="1"/>'
+        
+        body_top = min(open_y, close_y)
+        body_bottom = max(open_y, close_y)
+        body_height = max(1, body_bottom - body_top)
+        
+        body = f'<rect x="{x - candle_width/2}" y="{body_top}" width="{candle_width}" height="{body_height}" fill="{color}"/>'
+        
+        candle_paths.append(f"{wick}\n{body}")
+    
+    candle_svg = "\n".join(candle_paths)
+    
+    mas_to_show = show_ma or ['MA20']
+    for ma_name in mas_to_show:
+        if ma_name in recent.columns:
+            ma_values = recent[ma_name].values
+            ma_points = [f"{x_to_pix(i)},{y_to_pix(m)}" for i, m in enumerate(ma_values) if not pd.isna(m)]
+            if ma_points:
+                ma_color = {"MA5": "#ff6b6b", "MA10": "#ffd93d", "MA20": "#6bcb77", "MA60": "#4d96ff"}.get(ma_name, "#ff9f43")
+                ma_paths[ma_name] = f'<path d="M {" L ".join(ma_points)}" fill="none" stroke="{ma_color}" stroke-width="1.5"/>'
+    
+    ma_svg = "\n".join(ma_paths.values())
+    
+    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}">
+  <rect width="{width}" height="{height}" fill="#1a1a2e"/>
+  <text x="{padding}" y="25" fill="#888" font-size="11" font-family="monospace">{recent.iloc[0]['Date'].strftime('%Y-%m-%d' if hasattr(recent.iloc[0]['Date'], 'strftime') else str(recent.iloc[0]['Date'])[:10])}</text>
+  <text x="{width-padding}" y="25" fill="#888" font-size="11" font-family="monospace" text-anchor="end">{recent.iloc[-1]['Date'].strftime('%Y-%m-%d' if hasattr(recent.iloc[-1]['Date'], 'strftime') else str(recent.iloc[-1]['Date'])[:10]}</text>
+  {candle_svg}
+  {ma_svg}
+  <line x1="{padding}" y1="{padding}" x2="{padding}" y2="{height-padding}" stroke="#333" stroke-width="1"/>
+  <line x1="{padding}" y1="{height-padding}" x2="{width-padding}" y2="{height-padding}" stroke="#333" stroke-width="1"/>
+  <text x="{padding}" y="{height-15}" fill="#666" font-size="10" font-family="monospace">{price_min:.2f}</text>
+  <text x="{padding}" y="{padding+15}" fill="#666" font-size="10" font-family="monospace">{price_max:.2f}</text>
+  <text x="{width-10}" y="15" fill="#888" font-size="10" font-family="monospace" text-anchor="end">K-Line</text>
+</svg>'''
+    
+    return svg
+
+
+def generate_indicator_panel_svg(df: pd.DataFrame, indicator: str = "RSI", width: int = 800, height: int = 150) -> str:
+    """
+    生成技術指標子圖 SVG
+    
+    Args:
+        df: 包含指標數據的 DataFrame
+        indicator: 指標名稱 (RSI, MACD, KD)
+        width: 圖寬
+        height: 圖高
+    
+    Returns:
+        SVG 字符串
+    """
+    if df is None or df.empty or len(df) < 10:
+        return ""
+    
+    recent = df.tail(60)
+    padding = 40
+    chart_width = width - padding * 2
+    chart_height = height - padding * 2
+    
+    if indicator == "RSI" and 'RSI' in recent.columns:
+        values = recent['RSI'].values
+        min_val, max_val = 0, 100
+    elif indicator == "MACD" and 'MACD' in recent.columns:
+        values = recent['MACD'].values
+        min_val, max_val = min(values), max(values)
+    elif indicator == "KD" and 'K' in recent.columns:
+        values = recent['K'].values
+        min_val, max_val = 0, 100
+    else:
+        return ""
+    
+    val_range = max_val - min_val
+    if val_range == 0:
+        val_range = 1
+    
+    def y_to_pix(val):
+        return padding + chart_height - ((val - min_val) / val_range * chart_height)
+    
+    def x_to_pix(i):
+        return padding + (i / (len(recent) - 1)) * chart_width if len(recent) > 1 else padding
+    
+    points = [f"{x_to_pix(i)},{y_to_pix(v)}" for i, v in enumerate(values)]
+    line_path = "M " + " L ".join(points)
+    
+    if indicator == "RSI":
+        threshold_color = "#ff4757"
+        line_color = "#ffd93d"
+        extra_lines = f'''<line x1="{padding}" y1="{y_to_pix(70)}" x2="{width-padding}" y2="{y_to_pix(70)}" stroke="{threshold_color}" stroke-width="1" stroke-dasharray="4"/>
+<line x1="{padding}" y1="{y_to_pix(30)}" x2="{width-padding}" y2="{y_to_pix(30)}" stroke="{threshold_color}" stroke-width="1" stroke-dasharray="4"/>'''
+    else:
+        extra_lines = ""
+    
+    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}">
+  <rect width="{width}" height="{height}" fill="#1a1a2e"/>
+  <text x="{padding}" y="20" fill="#888" font-size="11" font-family="monospace">{indicator}</text>
+  <path d="{line_path}" fill="none" stroke="{line_color}" stroke-width="2"/>
+  {extra_lines}
+  <text x="{padding}" y="{height-10}" fill="#666" font-size="9" font-family="monospace">{min_val:.0f}</text>
+  <text x="{padding}" y="{padding+12}" fill="#666" font-size="9" font-family="monospace">{max_val:.0f}</text>
+</svg>'''
+    
+    return svg
     
     return "\n".join(lines)
