@@ -219,7 +219,8 @@ def detect_w底_m頭(df: pd.DataFrame) -> Dict:
         for i in range(len(swing_lows_idx) - 1):
             idx1, idx2 = swing_lows_idx[i], swing_lows_idx[i + 1]
             if abs(lows[idx1] - lows[idx2]) / lows[idx1] < 0.05:
-                peak_between = max(closes[max(idx1, idx2):min(idx1, idx2) + 30 if max(idx1, idx2) + 30 < len(closes) else len(closes)])
+                end_idx = min(max(idx1, idx2) + 30, len(closes))
+                peak_between = max(closes[max(idx1, idx2):end_idx])
                 if peak_between > max(lows[idx1], lows[idx2]) * 1.1:
                     neckline = peak_between
                     left_bottom = lows[idx1]
@@ -273,7 +274,8 @@ def detect_w底_m頭(df: pd.DataFrame) -> Dict:
         for i in range(len(swing_highs_idx) - 1):
             idx1, idx2 = swing_highs_idx[i], swing_highs_idx[i + 1]
             if abs(highs[idx1] - highs[idx2]) / highs[idx1] < 0.05:
-                valley_between = min(closes[max(idx1, idx2):min(idx1, idx2) + 30 if max(idx1, idx2) + 30 < len(closes) else len(closes)])
+                end_idx = min(max(idx1, idx2) + 30, len(closes))
+                valley_between = min(closes[max(idx1, idx2):end_idx])
                 if valley_between < min(highs[idx1], highs[idx2]) * 0.95:
                     neckline = valley_between
                     left_top = highs[idx1]

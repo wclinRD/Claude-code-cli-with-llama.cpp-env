@@ -8,18 +8,26 @@ from typing import Dict, List
 
 
 def calculate_mas(df: pd.DataFrame) -> pd.DataFrame:
-    """計算均線"""
-    if df is None or len(df) < 240:
+    """計算均線 - 根據可用資料動態計算"""
+    if df is None or len(df) < 5:
         return df
     
     df = df.copy()
     
-    df['MA5'] = df['Close'].rolling(window=5).mean()
-    df['MA10'] = df['Close'].rolling(window=10).mean()
-    df['MA20'] = df['Close'].rolling(window=20).mean()
-    df['MA60'] = df['Close'].rolling(window=60).mean()
-    df['MA120'] = df['Close'].rolling(window=120).mean()
-    df['MA240'] = df['Close'].rolling(window=240).mean()
+    required_periods = [
+        ('MA5', 5),
+        ('MA10', 10),
+        ('MA20', 20),
+        ('MA60', 60),
+        ('MA120', 120),
+        ('MA240', 240)
+    ]
+    
+    for ma, period in required_periods:
+        if len(df) >= period:
+            df[ma] = df['Close'].rolling(window=period).mean()
+        else:
+            df[ma] = np.nan
     
     return df
 
@@ -58,7 +66,9 @@ def granville_rules(df: pd.DataFrame) -> List[Dict]:
     1. MA4 從下降轉為走平或上升，股價從 MA4 上方穿破 MA4
     2. 股價向上穿越 MA4 後，又回測 MA4 但不跌破
     3. 股價在 MA4 上方行走，突然跌破 MA4 但很快站回
-    6.  股價快速下跌遠離 MA4，出現反彈
+    4. MA4 上升中，股價從 MA4 下方突破 MA4
+    5. MA4 下降中，股價從 MA4 上方跌破 MA4
+    6. 股價快速下跌遠離 MA4，出現反彈
     7. 股價站上 MA4 之後往上升，離 MA4 越來越遠，應該獲利了結
     8. MA4 從上升轉為走平或下跌，股價從 MA4 下方跌破 MA4
     """
@@ -119,6 +129,34 @@ def granville_rules(df: pd.DataFrame) -> List[Dict]:
                 'action': 'buy'
             })
         
+        if i >= 3:
+            ma4_3prev = df.iloc[i-3].get('MA4', df.iloc[i-3].get('MA5'))
+            ma4_2prev = df.iloc[i-2].get('MA4', df.iloc[i-2].get('MA5'))
+            if (pd.notna(ma4_3prev) and pd.notna(ma4_2prev) and
+                ma4_prev > ma4_2prev and ma4_2prev > ma4_3prev and
+                price > ma4 and df.iloc[i-1]['Close'] <= ma4_prev):
+                signals.append({
+                    'rule': 4,
+                    'name': '買入訊號4',
+                    'description': 'MA4 持續上升，股價從下突破 MA4',
+                    'date': str(curr['Date']),
+                    'action': 'buy'
+                })
+        
+        if i >= 3:
+            ma4_3prev = df.iloc[i-3].get('MA4', df.iloc[i-3].get('MA5'))
+            ma4_2prev = df.iloc[i-2].get('MA4', df.iloc[i-2].get('MA5'))
+            if (pd.notna(ma4_3prev) and pd.notna(ma4_2prev) and
+                ma4_prev < ma4_2prev and ma4_2prev < ma4_3prev and
+                price < ma4 and df.iloc[i-1]['Close'] >= ma4_prev):
+                signals.append({
+                    'rule': 5,
+                    'name': '賣出訊號5',
+                    'description': 'MA4 持續下降，股價從上跌破 MA4',
+                    'date': str(curr['Date']),
+                    'action': 'sell'
+                })
+        
         if i >= 5:
             ma4_avg_5 = df.iloc[i-5:i]['MA4'].mean()
             if price < ma4 and ma4 < ma4_avg_5 * 0.95:
@@ -161,6 +199,10 @@ def analyze_moving_avg(df: pd.DataFrame) -> Dict:
         return {'error': 'No data'}
     
     df_with_ma = calculate_mas(df.copy())
+    
+    if df_with_ma is None or 'MA5' not in df_with_ma.columns:
+        return {'error': 'Insufficient data for MA calculation'}
+    
     alignment = detect_ma_alignment(df_with_ma)
     signals = granville_rules(df_with_ma)
     
