@@ -187,6 +187,20 @@ def generate_comparison_chart(results: Dict) -> str:
     lines.append("\n## 波浪理論")
     if 'wave_theory' in results:
         wt = results['wave_theory']
-        lines.append(f"-波浪: {wt.get('description', wt.get('pattern', 'N/A'))}")
+        lines.append(f"- 波浪類型: {wt.get('wave_type', 'N/A')}")
+        lines.append(f"- 波浪位置: {wt.get('elliott_position', wt.get('wave_stage', 'N/A'))}")
+    
+    if 'wave_forecast' in results:
+        wf = results['wave_forecast']
+        lines.append("\n## 波浪走勢預測")
+        lines.append(f"- 現價: {wf.get('current_price', 'N/A')}")
+        if 'forecasts' in wf:
+            for f in wf['forecasts']:
+                prob = int(f.get('probability', 0) * 100)
+                lines.append(f"- {f.get('scenario', 'N/A')} ({prob}%): {f.get('description', 'N/A')}")
+                lines.append(f"  目標: {f.get('target', 'N/A')}, 停損: {f.get('stop_loss', 'N/A')}")
+        if 'time_estimate' in wf:
+            te = wf['time_estimate']
+            lines.append(f"- 時間預測: 短期 {te.get('short', 'N/A')}, 中期 {te.get('medium', 'N/A')}")
     
     return "\n".join(lines)

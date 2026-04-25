@@ -14,13 +14,13 @@ from data_fetcher import (
     fetch_data, get_latest_price, fetch_institutional_holdings, 
     fetch_margin_short, fetch_stock_info, fetch_daily_summary, fetch_industry_performance,
     detect_otc_market, fetch_gretai_range, detect_market, fetch_macro_data,
-    fetch_all_news, fetch_stock_news_by_keyword
+    fetch_all_news, fetch_stock_news_by_keyword, resolve_stock_code, search_stock_by_name
 )
 from price_action import analyze_price_action
 from moving_avg import analyze_moving_avg, calculate_mas
 from indicators import analyze_signals, detect_divergence, analyze_advanced_signals
 from chan_theory import analyze_chan
-from wave_theory import analyze_wave_structure, detect_elliott_waves, golden_ratio_analysis
+from wave_theory import analyze_wave_structure, detect_elliott_waves, golden_ratio_analysis, predict_wave_progression
 from chart_generator import (
     generate_price_table, 
     generate_ma_table, 
@@ -46,7 +46,13 @@ from strategy import (
 def run_full_analysis(ticker: str, period: str = "6mo", chart_type: str = "both") -> dict:
     """執行完整分析"""
     
-    print(f"正在分析: {ticker} ...")
+    resolved = resolve_stock_code(ticker)
+    if resolved:
+        original_ticker = ticker
+        ticker = resolved
+        print(f"正在分析: {ticker} (輸入: {original_ticker}) ...")
+    else:
+        print(f"正在分析: {ticker} ...")
     
     market = detect_market(ticker)
     df = None
@@ -77,6 +83,13 @@ def run_full_analysis(ticker: str, period: str = "6mo", chart_type: str = "both"
     results['wave_theory'] = analyze_wave_structure(df)
     results['elliott_waves'] = detect_elliott_waves(df)
     results['golden_ratio'] = golden_ratio_analysis(df)
+    # 波浪走勢預測
+    wt = results.get('wave_theory', {})
+    results['wave_forecast'] = predict_wave_progression(
+        df, 
+        wt.get('wave_type', '待確認'),
+        wt.get('elliott_position', 'unknown')
+    )
     
     twse_code = ticker.replace('.TW', '')
     if market == "TWSE" and re.match(r'^\d{4,6}$', twse_code):
@@ -491,6 +504,20 @@ def print_report(output: dict):
     ew = results.get('elliott_waves', {})
     if ew.get('description'):
         print(f"波浪位置: {ew.get('description')}")
+    
+    # 波浪走勢預測
+    wf = results.get('wave_forecast', {})
+    if wf.get('forecasts'):
+        print("\n## 波浪走勢預測")
+        print(f"現價: {wf.get('current_price', 'N/A')}")
+        if wf.get('time_estimate'):
+            te = wf['time_estimate']
+            print(f"時間預測: 短期 {te.get('short')}, 中期 {te.get('medium')}")
+        print("\n三種情景預測:")
+        for f in wf['forecasts']:
+            prob = int(f.get('probability', 0) * 100)
+            print(f"  • {f.get('scenario')} ({prob}%): {f.get('description')}")
+            print(f"    目標: {f.get('target')}, 停損: {f.get('stop_loss')}")
     
     print("\n## 黃金分割率")
     gr = results.get('golden_ratio', {})

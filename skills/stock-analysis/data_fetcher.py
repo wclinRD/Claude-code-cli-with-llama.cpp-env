@@ -17,7 +17,318 @@ except ImportError:
 
 TWSE_BASE_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY"
 TWSE_API_BASE = "https://www.twse.com.tw/rwd/zh"
+TWSE_MIS_API = "https://mis.twse.com.tw/stock/api"
 GRETAI_URL = "https://www.gretai.org.tw/web/stock/aftertrading"
+STOCK_CODE_CACHE = None
+
+
+def fetch_realtime_quote(stock_code: str, market: str = "tse") -> Optional[Dict]:
+    """
+    即時報價查詢（盤中）
+    
+    Args:
+        stock_code: 股票代碼 (如 2330)
+        market: tse (上市) 或 otc (上櫃)
+    
+    Returns:
+        dict: 包含 open, high, low, close, volume, change 等
+    """
+    import requests
+    
+    ex_ch = f"{market}_{stock_code}.tw"
+    
+    try:
+        resp = requests.get(
+            f"{TWSE_MIS_API}/getStockInfo.jsp",
+            params={"ex_ch": ex_ch, "json": 1, "delay": 0},
+            timeout=10
+        )
+        data = resp.json()
+        
+        if 'msgArray' not in data or not data['msgArray']:
+            return None
+        
+        stock = data['msgArray'][0]
+        
+        return {
+            'code': stock.get('c'),
+            'name': stock.get('n'),
+            'full_name': stock.get('nf'),
+            'open': float(stock.get('o', 0)),
+            'high': float(stock.get('h', 0)),
+            'low': float(stock.get('l', 0)),
+            'close': float(stock.get('z', 0)),
+            'prev_close': float(stock.get('y', 0)),
+            'volume': int(stock.get('v', 0)),
+            'limit_up': float(stock.get('u', 0)),
+            'limit_down': float(stock.get('w', 0)),
+            'exchange': stock.get('ex'),
+            'trade_time': stock.get('t'),
+            'trade_date': stock.get('d'),
+        }
+    
+    except Exception as e:
+        print(f"Realtime quote error: {e}")
+        return None
+
+
+def parse_float(val):
+    if val == '-' or not val:
+        return 0.0
+    return float(val.replace(',', ''))
+
+def fetch_multiple_quotes(stock_codes: List[str], market: str = "tse") -> List[Dict]:
+    """
+    一次查詢多檔股票即時報價
+    
+    Args:
+        stock_codes: 股票代碼列表 (如 ['2330', '2317', '2308'])
+        market: tse (上市) 或 otc (上櫃)
+    
+    Returns:
+        list: 各股票報價 dict 的列表
+    """
+    import requests
+    
+    if not stock_codes:
+        return []
+    
+    ex_ch = "|".join([f"{market}_{code}.tw" for code in stock_codes])
+    
+    try:
+        resp = requests.get(
+            f"{TWSE_MIS_API}/getStockInfo.jsp",
+            params={"ex_ch": ex_ch, "json": 1, "delay": 0},
+            timeout=15
+        )
+        data = resp.json()
+        
+        if 'msgArray' not in data:
+            return []
+        
+        results = []
+        for stock in data['msgArray']:
+            results.append({
+                'code': stock.get('c'),
+                'name': stock.get('n'),
+                'open': parse_float(stock.get('o')),
+                'high': parse_float(stock.get('h')),
+                'low': parse_float(stock.get('l')),
+                'close': parse_float(stock.get('z')),
+                'prev_close': parse_float(stock.get('y')),
+                'volume': int(parse_float(stock.get('v'))),
+                'trade_time': stock.get('t'),
+            })
+        
+        return results
+    
+    except Exception as e:
+        print(f"Multiple quotes error: {e}")
+        return []
+
+
+def check_market_status() -> Dict:
+    """
+    檢查大盤狀態（加權指數、漲跌）
+    
+    Returns:
+        dict: 指數、漲跌資料
+    """
+    import requests
+    
+    try:
+        resp = requests.get(
+            f"{TWSE_MIS_API}/getStockInfo.jsp",
+            params={"ex_ch": "tse_0050.tw|otc_0050.tw"},
+            timeout=10
+        )
+        data = resp.json()
+        
+        if 'msgArray' in data and data['msgArray']:
+            return {
+                'status': 'OK',
+                'data': data['msgArray']
+            }
+    except Exception as e:
+        return {'status': 'error', 'message': str(e)}
+    
+    return {'status': 'closed'}
+
+
+TWSTOCK_PRESET = {
+    "台積電": "2330",
+    "聯發科": "2454",
+    "台達電": "2308",
+    "聯電": "2303",
+    "鴻海": "2317",
+    "廣達": "2382",
+    "和碩": "4938",
+    "英業達": "2356",
+    "仁寶": "2324",
+    "緯創": "3231",
+    "技嘉": "2376",
+    "微星": "2377",
+    "華碩": "2357",
+    "宏碁": "2353",
+    "華擎": "3515",
+    "映泰": "2399",
+    "創見": "2451",
+    "威剛": "3260",
+    "群聯": "8299",
+    "慧榮": "3438",
+    "穩懋": "3105",
+    "宏捷科": "8086",
+    "全新": "2455",
+    "聯亞": "3081",
+    "中美晶": "5483",
+    "环球晶": "6488",
+    "台勝科": "3530",
+    "股價 ETF": {
+        "0050": "元大台灣50",
+        "0056": "元大高股息",
+        "0057": "富邦羅素500",
+        "006203": "元大MSCI台灣",
+        "006208": "富邦台灣50",
+        "00690": "兆豐王道半導體",
+        "00971": "中信關鍵半導體",
+        "00981": "統一全球半導體",
+        "009916": "國泰永續高股息",
+        "00403A": "元大台灣高股息",
+        "00991A": "中信小資高價30",
+    },
+    "金融": {
+        "2880": "富邦金",
+        "2881": "中信金",
+        "2882": "永豐金",
+        "2883": "玉山金",
+        "2884": "元大金",
+        "2885": "元富金",
+        "2886": "兆豐金",
+        "2887": "台新金",
+        "2888": "新光金",
+        "2889": "高雄銀",
+        "2890": "三商銀",
+        "2891": "中國人壽",
+        "2892": "第一金",
+        "2897": "王道銀行",
+    },
+    "傳產": {
+        "2002": "中鋼",
+        "2105": "正新",
+        "2207": "和泰車",
+    }
+}
+
+
+def search_stock_by_name(name: str) -> Optional[List[Dict]]:
+    """透過公司名稱搜尋股票代碼"""
+    import requests
+    
+    params = {
+        "code": name,
+        "response": "json"
+    }
+    
+    try:
+        resp = requests.get(
+            "https://www.twse.com.tw/rwd/zh/company/search/code",
+            params=params,
+            timeout=10
+        )
+        data = resp.json()
+        
+        if 'data' not in data or not data['data']:
+            return None
+        
+        results = []
+        for row in data['data']:
+            if len(row) >= 2:
+                results.append({
+                    'code': row[0],
+                    'name': row[1]
+                })
+        return results
+    
+    except Exception as e:
+        print(f"Stock search error: {e}")
+    
+    return None
+
+
+def get_stock_code_list() -> Dict[str, str]:
+    """取得股票代碼列表（名稱對應表）"""
+    global STOCK_CODE_CACHE
+    
+    if STOCK_CODE_CACHE:
+        return STOCK_CODE_CACHE
+    
+    import requests
+    
+    try:
+        resp = requests.get(
+            "https://www.twse.com.tw/rwd/zh/company/companyList",
+            params={"response": "json", "firstDate": "", "lastDate": ""},
+            timeout=30
+        )
+        data = resp.json()
+        
+        if 'data' not in data or not data['data']:
+            return {}
+        
+        cache = {}
+        for row in data['data']:
+            if len(row) >= 2:
+                code = row[0]
+                name = row[1]
+                cache[code] = name
+                cache[name] = code
+        
+        STOCK_CODE_CACHE = cache
+        return cache
+    
+    except Exception as e:
+        print(f"Stock code list error: {e}")
+        return {}
+
+
+def resolve_stock_code(input_str: str) -> Optional[str]:
+    """
+    解析輸入字串，自動識別代碼或名稱並轉換為標準代碼
+    支援格式：
+    - 2330, 2330.TW (直接返回)
+    - 台積電, 聯發科 (名稱搜尋)
+    """
+    input_str = input_str.strip()
+    
+    if input_str.upper().endswith('.TW'):
+        return input_str[:-3]
+    
+    if re.match(r'^\d{4,6}$', input_str):
+        return input_str
+    
+    code_list = get_stock_code_list()
+    
+    if input_str in code_list:
+        return code_list[input_str]
+    
+    for code, name in code_list.items():
+        if input_str in name or name in input_str:
+            return code
+    
+    for name, code in TWSTOCK_PRESET.items():
+        if isinstance(code, str):
+            if input_str in name or name in input_str:
+                return code
+        elif isinstance(code, dict):
+            for c2, n2 in code.items():
+                if input_str in n2 or n2 in input_str:
+                    return c2
+    
+    search_results = search_stock_by_name(input_str)
+    if search_results and len(search_results) > 0:
+        return search_results[0]['code']
+    
+    return None
 
 
 def detect_market(ticker: str) -> str:
@@ -80,17 +391,32 @@ def fetch_twse(stock_code: str, year: Optional[int] = None, month: Optional[int]
         if 'data' not in data or not data['data']:
             return None
         
+        def parse_date(date_str):
+            try:
+                parts = date_str.split('/')
+                year = int(parts[0]) + 1911
+                month = int(parts[1])
+                day = int(parts[2])
+                return pd.Timestamp(year=year, month=month, day=day)
+            except:
+                return pd.NaT
+        
+        def parse_num(val):
+            if val == '-' or not val:
+                return 0
+            return float(val.replace(',', ''))
+        
         records = []
         for row in data['data']:
             if len(row) >= 6:
                 try:
                     records.append({
-                        'Date': pd.to_datetime(row[0]),
-                        'Open': int(row[3]) if row[3] != '-' else 0,
-                        'High': int(row[4]) if row[4] != '-' else 0,
-                        'Low': int(row[5]) if row[5] != '-' else 0,
-                        'Close': int(row[6]) if row[6] != '-' else 0,
-                        'Volume': int(row[2]) if row[2] != '-' else 0
+                        'Date': parse_date(row[0]),
+                        'Open': parse_num(row[3]),
+                        'High': parse_num(row[4]),
+                        'Low': parse_num(row[5]),
+                        'Close': parse_num(row[6]),
+                        'Volume': int(parse_num(row[2]))
                     })
                 except:
                     continue
@@ -150,22 +476,30 @@ def fetch_data(ticker: str, period: str = "6mo", source: str = "auto") -> Option
     else:
         market = source
     
+    # Try TWSE first, fallback to yfinance if fails
+    df = None
     if market == "TWSE":
         twse_code = ticker.replace('.TW', '')
         if re.match(r'^\d{4,6}$', twse_code):
-            full_ticker = f"{twse_code}.TW"
-            df = fetch_yfinance(full_ticker, period)
-            if df is None or df.empty:
-                month_map = {'1mo': 1, '3mo': 3, '6mo': 6, '1y': 12, '2y': 24, '5y': 60}
-                months = month_map.get(period, 6)
+            month_map = {'1mo': 1, '3mo': 3, '6mo': 6, '1y': 12, '2y': 24, '5y': 60}
+            months = month_map.get(period, 6)
+            if detect_otc_market(twse_code):
+                df = fetch_gretai_range(twse_code, months)
+            else:
                 df = fetch_twse_range(twse_code, months)
-        else:
-            df = fetch_yfinance(ticker, period)
+        
+        # Fallback to yfinance if TWSE/Gretai fails
+        if df is None or df.empty:
+            # Use .TW suffix for ETFs
+            yf_ticker = ticker if ticker.endswith('.TW') else f"{ticker}.TW"
+            df = fetch_yfinance(yf_ticker, period)
     else:
         df = fetch_yfinance(ticker, period)
     
     if df is not None and not df.empty:
         df = df.sort_values('Date').reset_index(drop=True)
+        # Filter out rows with NaN Close price
+        df = df[df['Close'].notna()]
     
     return df
 
