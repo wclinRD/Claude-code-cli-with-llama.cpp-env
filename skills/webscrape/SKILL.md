@@ -13,32 +13,31 @@ compatibility: opencode
 
 ### 前置需求
 
-1. **安裝 WebScraperToolkit**
+1. **安裝 WebScraperToolkit（使用 venv）**
    ```bash
-   pipx install web-scraper-toolkit
+   python3 -m venv /tmp/venv
+   source /tmp/venv/bin/activate
+   pip install web-scraper-toolkit
    ```
 
 2. **安裝 Playwright 瀏覽器**
    ```bash
+   source /tmp/venv/bin/activate
    pipx run web-scraper-toolkit playwright install chromium
-   ```
-   或
-   ```bash
-   ~/.local/pipx/venvs/web-scraper-toolkit/bin/playwright install chromium
    ```
 
 3. **驗證安裝**
    ```bash
+   source /tmp/venv/bin/activate
    web-scraper --help
    ```
 
 ### 常見問題
 
-- 若 `web-scraper` 命令找不到，嘗試：
-  ```bash
-  ~/.local/bin/web-scraper --help
-  ```
-- 若權限不足，使用 pipx 安裝
+- 若 `web-scraper` 命令找不到，使用完整路徑：
+   ```bash
+   /tmp/venv/bin/web-scraper --help
+   ```
 
 ---
 
@@ -101,7 +100,13 @@ web-scraper --input urls.txt --format markdown --workers 5 --export
 
 ## 實作流程
 
-### Step 1: 解析用戶輸入
+### Step 1: 準備環境
+
+啟動 venv 並驗證 web-scraper 可用：
+```bash
+source /tmp/venv/bin/activate
+/tmp/venv/bin/web-scraper --help
+```
 
 從用戶訊息中提取：
 1. **URL** - 使用正規表達式匹配 http/https 開頭的 URL
@@ -114,16 +119,16 @@ web-scraper --input urls.txt --format markdown --workers 5 --export
 
 ```bash
 # 單頁抓取
-cd /tmp && web-scraper --url <url> --format <format> --export
+/tmp/venv/bin/web-scraper --url <url> --format <format> --export
 
 # 批量抓取
-cd /tmp && web-scraper --input <file> --format <format> --workers <n> --export --merge
+/tmp/venv/bin/web-scraper --input <file> --format <format> --workers <n> --export --merge
 ```
 
 ### Step 3: 讀取結果
 
 抓取完成後，讀取輸出檔案：
-- 檔案位置：`/tmp/{domain}_{hash}.{format}`
+- 檔案位置：`/tmp/{domain}_{hash}.{format}` 或 `--output-dir` 指定目錄
 - 使用 Read 工具讀取內容
 
 ### Step 4: 返回結果
@@ -157,13 +162,14 @@ This domain is for use in documentation examples without needing permission.
 3. 遇到 Cloudflare 等 anti-bot 頁面時，工具會自動嘗試繞過
 4. 檔案名稱格式：`{domain}_{hash}.{format}`
 5. 使用 `--headless` 可在無頭模式執行避免彈出瀏覽器
+6. 確保使用 venv 中的命令路徑：`/tmp/venv/bin/web-scraper`
 
 ---
 
 ## 錯誤處理
 
 | 錯誤 | 解決方案 |
-|------|----------|
-| `command not found: web-scraper` | 使用完整路徑 `~/.local/bin/web-scraper` 或重新安裝 |
-| 無法抓取 | 檢查 URL 是否正確，嘗試��� `--headless` |
+|------|------|
+| `command not found: web-scraper` | 使用完整路徑 `/tmp/venv/bin/web-scraper` |
+| 無法抓取 | 檢查 URL 是否正確，嘗試 `--headless` |
 | 被封禁 | 減少 `--workers`，增加 `--delay` |
